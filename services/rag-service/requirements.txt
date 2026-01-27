@@ -10,7 +10,7 @@ pydantic-settings==2.5.2
 # RAG Framework
 langchain==0.3.15
 langchain-community==0.3.15
-langchain-core==0.3.31
+langchain-core==0.3.81
 
 # Vector Database
 chromadb==0.5.23
