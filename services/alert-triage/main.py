@@ -21,6 +21,7 @@ from starlette.responses import Response
 from config import settings
 from models import SecurityAlert, TriageResponse, HealthResponse
 from llm_client import OllamaClient
+from worker_pool import WorkerPool
 
 # Configure logging
 logging.basicConfig(
@@ -44,8 +45,9 @@ ANALYSIS_CONFIDENCE = Histogram(
     'LLM confidence scores'
 )
 
-# Global LLM client
+# Global LLM client and worker pool
 llm_client: OllamaClient = None
+worker_pool: WorkerPool = None
 
 
 @asynccontextmanager
@@ -70,10 +72,26 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Ollama service connected successfully")
 
+    # Initialize async worker pool
+    async def _analyze_from_dict(alert_data: dict):
+        alert = SecurityAlert(**alert_data)
+        return await llm_client.analyze_alert(alert)
+
+    worker_pool = WorkerPool(
+        analyze_fn=_analyze_from_dict,
+        worker_count=settings.worker_count,
+        queue_threshold=settings.queue_threshold,
+        circuit_breaker_enabled=settings.circuit_breaker_enabled,
+    )
+    await worker_pool.start()
+    app.state.worker_pool = worker_pool
+    logger.info(f"Worker pool started: {settings.worker_count} workers")
+
     yield
 
     # Shutdown
     logger.info("Shutting down Alert Triage Service")
+    await worker_pool.stop()
 
 
 # FastAPI app
@@ -281,6 +299,58 @@ async def batch_analyze(alerts: list[SecurityAlert]):
     }
 
 
+@app.post("/analyze/async")
+async def analyze_async(alert: SecurityAlert, callback_url: str = None):
+    """
+    Submit alert for async triage. Returns job_id immediately.
+
+    High-severity alerts are processed first. When queue is deep,
+    low-severity alerts get ML-only results (circuit breaker).
+
+    Poll GET /jobs/{job_id} for results.
+    """
+    pool = app.state.worker_pool
+    job_id = pool.submit(alert.model_dump(mode="json"), callback_url=callback_url)
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "queue_depth": pool.queue_depth,
+        "message": f"Alert {alert.alert_id} queued for async analysis",
+    }
+
+
+@app.get("/jobs/{job_id}")
+async def get_job(job_id: str):
+    """
+    Get the status and result of an async triage job.
+
+    Returns job status (queued/processing/completed/failed) and
+    result when complete.
+    """
+    pool = app.state.worker_pool
+    result = pool.get_job(job_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    return {
+        "job_id": result.job_id,
+        "status": result.status,
+        "alert_id": result.alert_id,
+        "result": result.result,
+        "error": result.error,
+        "created_at": result.created_at,
+        "completed_at": result.completed_at,
+        "processing_time_ms": result.processing_time_ms,
+        "circuit_breaker_applied": result.circuit_breaker_applied,
+    }
+
+
+@app.get("/workers/stats")
+async def worker_stats():
+    """Get worker pool statistics."""
+    pool = app.state.worker_pool
+    return pool.stats
+
+
 @app.get("/")
 async def root():
     """
@@ -292,7 +362,10 @@ async def root():
         "status": "operational",
         "endpoints": {
             "analyze": "/analyze",
+            "analyze_async": "/analyze/async",
+            "jobs": "/jobs/{job_id}",
             "batch": "/batch",
+            "workers": "/workers/stats",
             "health": "/health",
             "metrics": "/metrics",
             "docs": "/docs"

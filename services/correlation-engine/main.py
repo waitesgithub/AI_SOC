@@ -38,6 +38,7 @@ from models import (
     HealthResponse,
 )
 from correlator import CorrelationEngine
+from predictor import AttackPredictor
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -88,9 +89,21 @@ async def lifespan(app: FastAPI):
     try:
         await create_db_pool(settings.database_url)
         logger.info("Database pool initialised successfully")
+
+        # Initialize attack predictor
+        predictor = AttackPredictor()
+        try:
+            async for db in get_db():
+                await predictor.train(db)
+                break
+        except Exception as e:
+            logger.warning("Predictor training skipped: %s", e)
+        app.state.predictor = predictor
+        logger.info("Attack predictor initialized: %s", predictor.stats)
     except Exception as exc:
         # Graceful degradation: service starts but reports DB as unavailable
         logger.warning("Database not available at startup: %s", exc)
+        app.state.predictor = AttackPredictor()
 
     yield
 
@@ -417,6 +430,38 @@ async def update_incident_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update incident status: {str(exc)}",
         )
+
+
+@app.get("/predict/{kill_chain_stage}")
+async def predict_next_stage(kill_chain_stage: str, top_k: int = Query(3, ge=1, le=5)):
+    """
+    Predict the most likely next kill chain stages from the current stage.
+
+    Uses Markov chain transition probabilities learned from historical
+    incidents. Falls back to domain knowledge when insufficient data.
+    """
+    predictor = getattr(app.state, "predictor", None)
+    if not predictor:
+        raise HTTPException(status_code=503, detail="Predictor not initialized")
+
+    predictions = predictor.predict_next_stages(kill_chain_stage, top_k=top_k)
+    return {
+        "current_stage": kill_chain_stage,
+        "predictions": predictions,
+        "predictor_stats": predictor.stats,
+    }
+
+
+@app.post("/predict/retrain")
+async def retrain_predictor(db: AsyncSession = Depends(get_db)):
+    """Retrain the predictor from current incident history."""
+    predictor = getattr(app.state, "predictor", None)
+    if not predictor:
+        app.state.predictor = AttackPredictor()
+        predictor = app.state.predictor
+
+    await predictor.train(db)
+    return {"status": "retrained", "stats": predictor.stats}
 
 
 @app.get(

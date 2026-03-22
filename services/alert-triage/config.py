@@ -60,6 +60,17 @@ class Settings(BaseSettings):
     feedback_enabled: bool = True
     feedback_service_url: str = "http://feedback-service:8000"
 
+    # Contextual Memory (Phase 4)
+    context_enabled: bool = True
+    context_history_limit: int = 5   # Max recent alerts to include per source IP
+    context_timeout: int = 5         # Seconds for each context fetch
+    environment_context: str = ""    # Static env description (override via TRIAGE_ENVIRONMENT_CONTEXT)
+
+    # Async Worker Pool (Phase 3)
+    worker_count: int = 3
+    queue_threshold: int = 50  # Circuit breaker activates above this queue depth
+    circuit_breaker_enabled: bool = True
+
     # Performance Tuning
     max_concurrent_requests: int = 10
     request_timeout: int = 120

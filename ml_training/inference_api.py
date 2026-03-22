@@ -191,6 +191,27 @@ async def list_models():
     }
 
 
+@app.post("/models/reload")
+async def reload_models():
+    """
+    Hot-reload models from disk without restart.
+
+    Called by the retraining pipeline after promoting new models.
+    """
+    try:
+        load_models()
+        return {
+            "status": "success",
+            "models_loaded": list(models.keys()),
+            "message": "Models reloaded successfully"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reload models: {str(e)}"
+        )
+
+
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(flow: NetworkFlow):
     """

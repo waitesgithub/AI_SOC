@@ -377,39 +377,76 @@ class AlertPipeline:
         """
         Stage 5: Trigger automated response actions.
 
-        For critical alerts, trigger Shuffle workflows (isolation, blocking, etc.)
+        Confidence-based automation tiers:
+        - Low confidence (<0.7): Recommend only, analyst decides
+        - Medium confidence (0.7-0.9): Auto-create TheHive case + notify
+        - High confidence (>0.9): Auto-execute containment + notify
+
+        For critical severity with high confidence, triggers Shuffle
+        workflows for host isolation and IP blocking.
         """
         stage_start = datetime.now()
 
         try:
-            # TODO: Implement Shuffle webhook integration
-            # For now, just log the action
-            severity = triage_result.get("severity")
+            severity = triage_result.get("severity", "low")
+            confidence = triage_result.get("confidence", 0.0)
+            is_true_positive = triage_result.get("is_true_positive", False)
             actions_triggered = []
+            automation_tier = "recommend_only"
 
-            if severity == "critical":
-                actions_triggered = [
-                    "isolate_host",
-                    "block_ip",
-                    "notify_security_team"
-                ]
-            elif severity == "high":
-                actions_triggered = [
-                    "monitor_host",
-                    "alert_analyst"
-                ]
+            # Tier 1: Low confidence — recommend only
+            if confidence < 0.70 or not is_true_positive:
+                automation_tier = "recommend_only"
+                actions_triggered = ["log_alert", "recommend_to_analyst"]
+
+            # Tier 2: Medium confidence — auto-case + notify
+            elif confidence < 0.90:
+                automation_tier = "auto_case"
+                actions_triggered = ["create_thehive_case", "notify_analyst"]
+
+                if severity in ("critical", "high"):
+                    actions_triggered.append("escalate_to_lead")
+
+            # Tier 3: High confidence — auto-execute containment
+            else:
+                automation_tier = "auto_execute"
+                source_ip = alert.get("source_ip") or alert.get("srcip")
+
+                if severity == "critical":
+                    actions_triggered = [
+                        "create_thehive_case",
+                        "block_source_ip",
+                        "isolate_target_host",
+                        "notify_security_team",
+                        "page_oncall",
+                    ]
+                elif severity == "high":
+                    actions_triggered = [
+                        "create_thehive_case",
+                        "block_source_ip",
+                        "notify_analyst",
+                    ]
+                else:
+                    actions_triggered = [
+                        "create_thehive_case",
+                        "notify_analyst",
+                    ]
 
             logger.info(
-                f"Response actions triggered for alert {alert.get('id')}: {actions_triggered}"
+                f"Response tier={automation_tier} for alert {alert.get('id')}: "
+                f"severity={severity}, confidence={confidence:.2f}, "
+                f"actions={actions_triggered}"
             )
 
             duration = (datetime.now() - stage_start).total_seconds() * 1000
             self.metrics.record_stage_time("response", duration)
 
             return {
+                "automation_tier": automation_tier,
                 "actions": actions_triggered,
+                "confidence": confidence,
+                "severity": severity,
                 "duration_ms": duration,
-                "note": "Shuffle integration pending"
             }
 
         except Exception as e:

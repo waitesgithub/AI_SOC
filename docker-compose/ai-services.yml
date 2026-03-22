@@ -247,6 +247,33 @@ services:
           memory: 256M
           cpus: '0.25'
 
+  # Rule Generator - LLM-generated Sigma detection rules
+  rule-generator:
+    build:
+      context: ../services/rule-generator
+      dockerfile: Dockerfile
+    container_name: rule-generator
+    hostname: rule-generator
+    restart: unless-stopped
+    ports:
+      - "8700:8000"
+    networks:
+      - ai-network
+    depends_on:
+      ollama:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
   # ChromaDB
   chromadb:
     image: chromadb/chroma:latest

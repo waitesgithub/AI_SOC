@@ -13,6 +13,7 @@ import httpx
 from config import settings
 from models import SecurityAlert, TriageResponse, SeverityLevel, AlertCategory, IOC, TriageRecommendation
 from ml_client import MLInferenceClient, MLPrediction, enrich_llm_prompt_with_ml
+from context_manager import ContextManager
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,15 @@ class OllamaClient:
             enabled=settings.ml_enabled
         )
 
+        # Initialize context manager for Phase 4 contextual memory
+        self.context_manager = ContextManager(
+            feedback_service_url=settings.feedback_service_url,
+            enabled=settings.context_enabled,
+            timeout=settings.context_timeout,
+            history_limit=settings.context_history_limit,
+            environment_context=settings.environment_context,
+        )
+
     async def check_health(self) -> bool:
         """
         Check if Ollama service is reachable.
@@ -89,25 +99,37 @@ class OllamaClient:
             logger.error(f"Ollama health check failed: {e}")
             return False
 
-    def _build_triage_prompt(self, alert: SecurityAlert) -> str:
+    def _build_triage_prompt(
+        self,
+        alert: SecurityAlert,
+        context: str = "",
+    ) -> str:
         """
         Construct security-focused prompt for alert triage.
 
         Uses structured prompting with clear instructions for JSON output.
+        An optional context block (environment knowledge, alert history,
+        analyst feedback) is injected between the system instructions and
+        the alert data so the LLM has background knowledge before reading
+        the specific alert.
 
         Args:
-            alert: SecurityAlert object
+            alert:   SecurityAlert object
+            context: Pre-formatted context string from ContextManager.
+                     Empty string means no context injection.
 
         Returns:
             str: Formatted prompt for LLM
         """
-        # TODO: Week 4 - Refine prompt based on evaluation results
-        # TODO: Week 5 - Add RAG context injection here
+        # Build the context separator — only present when context was fetched
+        context_section = ""
+        if context:
+            context_section = f"\n\n**ANALYST CONTEXT (use to inform your assessment):**\n{context}\n\n---\n"
 
         prompt = f"""You are an expert cybersecurity analyst performing alert triage for a Security Operations Center (SOC).
 
 **TASK:** Analyze the following security alert and provide a structured assessment.
-
+{context_section}
 **ALERT DETAILS:**
 - Alert ID: {alert.alert_id}
 - Rule: {alert.rule_description} (Level {alert.rule_level})
@@ -288,10 +310,11 @@ Begin your analysis now:"""
 
         Workflow:
         1. Attempt ML prediction for additional context
-        2. Enhance LLM prompt with ML results
-        3. Try primary model (Foundation-Sec-8B)
-        4. Fall back to secondary model (LLaMA 3.1) if primary fails
-        5. Return None if both fail
+        2. Fetch contextual memory (environment, alert history, analyst feedback)
+        3. Inject context into base prompt, then enrich with ML signal
+        4. Try primary model (Foundation-Sec-8B)
+        5. Fall back to secondary model (LLaMA 3.1) if primary fails
+        6. Return None if both fail
 
         Args:
             alert: SecurityAlert to analyze
@@ -310,11 +333,14 @@ Begin your analysis now:"""
                     f"(confidence={ml_prediction.confidence:.2f})"
                 )
 
-        # Step 2: Build prompt with ML enrichment
-        base_prompt = self._build_triage_prompt(alert)
+        # Step 2: Fetch contextual memory and inject into base prompt
+        context_block = await self.context_manager.build_context(alert)
+        base_prompt = self._build_triage_prompt(alert, context=context_block)
+
+        # Step 3: Enrich with ML prediction signal
         enriched_prompt = enrich_llm_prompt_with_ml(base_prompt, ml_prediction)
 
-        # Step 3: Try primary model
+        # Step 4: Try primary model
         logger.info(f"Analyzing alert {alert.alert_id} with {self.primary_model}")
         llm_output = await self._call_ollama(
             enriched_prompt,
@@ -332,7 +358,7 @@ Begin your analysis now:"""
                 logger.info(f"Alert {alert.alert_id} analyzed successfully")
                 return response
 
-        # Step 4: Fallback to secondary model
+        # Step 5: Fallback to secondary model
         logger.warning(f"Primary model failed, trying fallback: {self.fallback_model}")
         llm_output = await self._call_ollama(
             enriched_prompt,
