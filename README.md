@@ -659,6 +659,6 @@ If this implementation or the associated survey contributes to your research:
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text.
 
 **Author:** Abdul Bari
-**Contact:** abdul.bari8019@coyote.csusb.edu
+**Contact:** z@onyxlab.ai
 **Institution:** California State University, San Bernardino
 **Documentation:** [research.onyxlab.ai](https://research.onyxlab.ai)
