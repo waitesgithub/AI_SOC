@@ -69,8 +69,8 @@ QUICK_LINKS = [
 # ---------------------------------------------------------------------------
 # Generic proxy helper
 # ---------------------------------------------------------------------------
-TIMEOUT_LONG = 90   # LLM-heavy endpoints (analysis, simulation)
-TIMEOUT_STD  = 10   # Fast endpoints
+TIMEOUT_LONG = 180  # LLM-heavy endpoints (analysis, simulation — can take 2+ min)
+TIMEOUT_STD  = 15   # Fast endpoints
 
 
 def _proxy(upstream_url, method="GET", timeout=TIMEOUT_STD):
@@ -419,4 +419,4 @@ if __name__ == "__main__":
     print("Access at: http://localhost:5050")
     print("Press Ctrl+C to stop")
     print("=" * 60)
-    app.run(host="0.0.0.0", port=5050, debug=False)
+    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)

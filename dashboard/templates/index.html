@@ -2067,7 +2067,15 @@ async function runSimulation() {
   btn.disabled = true;
   btn.innerHTML = `<div class="spinner"></div> Simulating...`;
   statusRow.classList.remove('hidden');
-  resultsEl.innerHTML = '';
+  resultsEl.innerHTML = `
+    <div style="padding:16px;color:var(--text-secondary);line-height:1.8;">
+      <div style="font-size:15px;color:var(--text-primary);margin-bottom:8px;">What's happening right now:</div>
+      <div>1. <strong>Opportunist</strong> — scanning for easy targets, default credentials, unpatched services</div>
+      <div>2. <strong>APT Operator</strong> — careful recon, targeting high-value assets, avoiding detection</div>
+      <div>3. <strong>Ransomware Crew</strong> — aggressive lateral movement, maximum host compromise</div>
+      <div>4. <strong>Insider Threat</strong> — using legitimate access to reach sensitive data</div>
+      <div style="margin-top:12px;color:var(--text-muted);font-size:12px;">Each agent makes decisions via AI against your actual network configuration. This takes 30-120 seconds depending on timesteps.</div>
+    </div>`;
 
   const res = await apiFetch(`/api/simulate?timesteps=${timesteps}`, {
     method: 'POST',
@@ -2081,47 +2089,116 @@ async function runSimulation() {
   statusRow.classList.add('hidden');
 
   if (!res.ok) {
-    resultsEl.innerHTML = `<div class="text-muted" style="font-size:12px;padding:8px 0;">Simulation failed: ${res.data?.error || 'Service unavailable'}</div>`;
-    toast('Simulation failed', 'error');
+    const errMsg = res.data?.error || '';
+    let humanMsg = 'The simulation could not complete.';
+    if (errMsg.includes('timed out')) {
+      humanMsg = `The simulation took too long (>${timesteps * 40}s). Try reducing timesteps to 1 or 2. Each timestep requires 4 AI decisions (~10s each).`;
+    } else if (errMsg.includes('Connection refused') || errMsg.includes('connection')) {
+      humanMsg = 'The simulation engine is not running. Make sure the correlation-engine container is healthy.';
+    }
+    resultsEl.innerHTML = `<div style="padding:16px;color:var(--high);line-height:1.6;">
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px;">Simulation did not complete</div>
+      <div style="color:var(--text-secondary);">${humanMsg}</div>
+    </div>`;
+    toast('Simulation did not complete — see details below', 'error');
     return;
   }
 
   const d = res.data;
-  const agents = d.agents || d.attacker_agents || d.results || [];
-  const weaknesses = d.weakest_points || d.vulnerabilities || [];
-  const recommendations = d.recommended_actions || d.recommendations || [];
+  const agents = d.campaigns || [];
+  const weaknesses = d.weakest_points || [];
+  const recommendations = d.recommended_actions || [];
+  const summary = d.results_summary || {};
 
-  let html = `<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;font-family:var(--font-mono);">Simulation completed — ${timeAgo(new Date().toISOString())}</div>`;
+  // Archetype descriptions for human context
+  const archetypeDesc = {
+    opportunist: 'Low-skill attacker scanning for easy wins — default creds, unpatched services',
+    apt: 'State-sponsored operator — patient, stealthy, targets high-value assets',
+    ransomware: 'Ransomware crew — aggressive, fast, maximizes lateral spread',
+    insider: 'Malicious insider — has legitimate access, targets sensitive data',
+  };
 
-  if (agents.length) {
-    html += `<div class="subsection-title">Agent Results</div>`;
-    agents.forEach(a => {
-      html += `<div class="agent-card">
-        <div class="ac-name">${escHtml(a.archetype || a.name || 'Unknown Archetype')}</div>
-        <div class="ac-stats">
-          <div>Final Stage: <span>${a.final_stage || a.stage || 'N/A'}</span></div>
-          <div>Hosts: <span>${a.hosts_compromised ?? a.hosts ?? 0}</span></div>
+  const resultColors = { success: 'var(--success)', detected: 'var(--high)', blocked: 'var(--critical)', failure: 'var(--text-muted)' };
+
+  let html = `<div style="padding:4px 0 12px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+    <div style="font-size:13px;color:var(--text-primary);font-weight:600;">Simulation Complete</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+      ${summary.total_actions || 0} actions taken across ${agents.length} attackers &mdash;
+      ${summary.successful_actions || 0} succeeded, ${summary.blocked_actions || 0} blocked, ${summary.detected_actions || 0} detected
+      &mdash; completed in ${((d.duration_ms || 0) / 1000).toFixed(0)}s
+    </div>
+  </div>`;
+
+  // Per-agent campaign narratives — show the attacker's REASONING
+  agents.forEach(a => {
+    const archetype = a.archetype || 'unknown';
+    const compromised = Array.isArray(a.hosts_compromised) ? a.hosts_compromised : [];
+    const path = a.attack_path || [];
+    const desc = archetypeDesc[archetype] || '';
+
+    html += `<div style="margin-bottom:20px;padding:14px;background:var(--bg-card);border-radius:8px;border-left:4px solid ${compromised.length > 0 ? 'var(--critical)' : 'var(--text-muted)'};">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:14px;font-weight:600;color:var(--text-primary);text-transform:uppercase;">${escHtml(archetype)}</div>
+        <div style="font-size:11px;color:${compromised.length > 0 ? 'var(--critical)' : 'var(--success)'};">
+          ${compromised.length > 0 ? compromised.length + ' host(s) compromised' : 'No compromise achieved'}
         </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${desc}</div>`;
+
+    // Attack path as a narrative timeline
+    if (path.length) {
+      path.forEach((step, i) => {
+        const color = resultColors[step.result] || 'var(--text-muted)';
+        const resultLabel = step.result === 'success' ? 'SUCCESS' : step.result === 'detected' ? 'DETECTED' : step.result === 'blocked' ? 'BLOCKED' : 'FAILED';
+        const reasoning = step.reasoning || '';
+
+        html += `<div style="padding:8px 0 8px 16px;border-left:2px solid ${color};margin-left:8px;margin-bottom:4px;">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">Turn ${step.timestep + 1} &mdash; ${escHtml(step.action)} on <span style="font-family:var(--font-mono);color:var(--accent);">${escHtml(step.target)}</span></div>
+          <div style="font-size:12px;color:var(--text-secondary);font-style:italic;margin-bottom:3px;">"${escHtml(reasoning)}"</div>
+          <div style="font-size:11px;">
+            <span style="color:${color};font-weight:600;">${resultLabel}</span>
+            ${step.mitre && step.mitre !== '-' ? ` &mdash; <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">${escHtml(step.mitre)}</span>` : ''}
+          </div>
+        </div>`;
+      });
+    } else {
+      html += `<div style="font-size:12px;color:var(--text-muted);padding:8px 0 0 16px;">No actions recorded</div>`;
+    }
+
+    html += `</div>`;
+  });
+
+  // Weakest points
+  if (weaknesses.length) {
+    html += `<div style="margin-top:16px;padding:12px;background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.3);border-radius:8px;">
+      <div style="font-size:13px;font-weight:600;color:var(--critical);margin-bottom:8px;">Weakest Points in Your Network</div>`;
+    weaknesses.forEach(w => {
+      const vuln = typeof w === 'string' ? w : (w.vulnerability || JSON.stringify(w));
+      const count = w.exploit_count || '';
+      html += `<div style="font-size:12px;color:var(--text-secondary);padding:4px 0;border-bottom:1px solid rgba(248,81,73,0.1);">
+        ${escHtml(vuln)}${count ? ` <span style="color:var(--critical);font-weight:600;">(exploited ${count}x)</span>` : ''}
       </div>`;
     });
+    html += `</div>`;
   }
 
-  if (weaknesses.length) {
-    html += `<div class="subsection-title" style="color:var(--critical);">Weakest Points</div>`;
-    html += `<ul class="weakness-list">${weaknesses.map(w => `<li>${escHtml(String(w))}</li>`).join('')}</ul>`;
-  }
-
+  // Recommended actions
   if (recommendations.length) {
-    html += `<div class="subsection-title">Recommended Actions</div>`;
-    html += `<ol class="action-list">${recommendations.map(r => `<li>${escHtml(String(r))}</li>`).join('')}</ol>`;
-  }
-
-  if (!agents.length && !weaknesses.length && !recommendations.length) {
-    html += `<pre style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);white-space:pre-wrap;">${escHtml(JSON.stringify(d, null, 2)).slice(0, 800)}</pre>`;
+    html += `<div style="margin-top:12px;padding:12px;background:rgba(63,185,80,0.08);border:1px solid rgba(63,185,80,0.3);border-radius:8px;">
+      <div style="font-size:13px;font-weight:600;color:var(--success);margin-bottom:8px;">Recommended Actions</div>`;
+    recommendations.forEach((r, i) => {
+      const action = typeof r === 'string' ? r : (r.action || JSON.stringify(r));
+      const rationale = r.rationale || '';
+      html += `<div style="font-size:12px;color:var(--text-primary);padding:6px 0;border-bottom:1px solid rgba(63,185,80,0.1);">
+        <span style="color:var(--success);font-weight:700;">${i + 1}.</span> ${escHtml(action)}
+        ${rationale ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${escHtml(rationale)}</div>` : ''}
+      </div>`;
+    });
+    html += `</div>`;
   }
 
   resultsEl.innerHTML = html;
-  toast('Simulation complete', 'success');
+  toast('Simulation complete — see attacker narratives below', 'success');
 }
 
 // ── RISK SCORES ──────────────────────────────────────────────
