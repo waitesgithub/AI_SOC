@@ -510,6 +510,50 @@ Alerts are grouped into incidents using three signals:
 
 Once an incident is established, a Markov chain model of observed kill chain transitions produces a probability distribution over likely next-stage attacks. These predictions are exposed via `/predict/{current_stage}` and used to pre-load relevant runbooks.
 
+### Attack Campaign Simulator
+
+Traditional SOC prediction is generic: "after reconnaissance, there is a 60% probability of credential attack." This probability is the same regardless of whether the target network has MFA deployed, whether services are patched, or whether EDR is running on endpoints.
+
+The attack campaign simulator replaces this with environment-specific prediction. When the correlation engine detects a new incident, the simulator can spawn LLM-powered attacker agents with distinct behavioral archetypes and run them against a model of the organization's actual infrastructure.
+
+**Four attacker archetypes:**
+
+| Archetype | Behavior | Objective |
+|-----------|----------|-----------|
+| Opportunist | Low skill, impatient, avoids defended targets | Quick compromise for easy wins |
+| APT | Expert, patient, stealth-first | Long-term access to high-value assets |
+| Ransomware | Aggressive, speed over stealth | Maximum lateral spread before encryption |
+| Insider | Legitimate access, uses normal tools | Exfiltrate specific data |
+
+**How it works:**
+
+1. The infrastructure environment model loads the real network topology: hosts with their open ports, running services, known CVEs, and defensive controls (MFA, EDR, firewall rules, patch status).
+2. Each attacker agent sees what it has discovered about the environment and selects its next action via the LLM, guided by its archetype personality.
+3. The environment evaluates each action deterministically based on actual defense state. The LLM cannot hallucinate success — if MFA is enabled, brute force fails regardless of what the LLM wants.
+4. After all timesteps complete, a report generator analyzes the traces and produces: which attack paths succeeded, which defenses held, which vulnerabilities were exploited, and what preemptive actions would have the highest impact.
+
+**What the report tells you that generic prediction cannot:**
+
+- "3 of 4 attacker types found a path through CVE-2024-7347 on your web server — patch this first."
+- "MFA on the mail server blocked all credential attacks — that control is working."
+- "The workstation with no EDR was the only host fully compromised — deploy endpoint protection there."
+- "The APT agent reached your production database via lateral movement from the DMZ. Network segmentation between DMZ and internal is insufficient."
+
+The simulator produces predictions that are specific to the organization's defensive posture. It functions as an automated penetration test that runs in seconds rather than days, triggered by real incident detection rather than scheduled manually.
+
+The 20 attack actions in the simulator's action space are mapped to MITRE ATT&CK techniques (T1046, T1190, T1110, T1566, T1059, T1003, T1021, T1041, T1486, and others), so predictions integrate directly with the existing MITRE mapping throughout the platform.
+
+**API:**
+```bash
+# Run a simulation against the default environment
+curl -X POST "http://localhost:8600/simulate?timesteps=3"
+
+# Run with custom environment (pass infrastructure JSON in body)
+curl -X POST "http://localhost:8600/simulate" \
+  -H "Content-Type: application/json" \
+  -d '{"hosts": {...}, "segments": {...}}'
+```
+
 ---
 
 ## Limitations and Future Work
@@ -528,6 +572,10 @@ Once an incident is established, a Markov chain model of observed kill chain tra
 
 **No adversarial feedback protection.** The feedback loop currently trusts all analyst-submitted labels. A compromised or mistaken analyst could degrade model quality over time. Label validation and outlier detection on feedback data are not yet implemented.
 
+**Simulation fidelity.** The attack campaign simulator uses a simplified environment model and 20 discrete attack actions. Real-world attacker behavior is more nuanced than the four archetypes can represent. Simulation predictions should be treated as directional guidance for defensive prioritization, not as validated forecasts. The simulator has not been benchmarked against real-world attack outcomes.
+
+**Simulation latency.** Each simulation run requires 8-15 LLM calls via Ollama. On consumer hardware without GPU acceleration, a 4-agent x 3-timestep simulation takes 60-90 seconds. With GPU, this drops to 15-30 seconds. The simulator is designed for on-demand analysis rather than real-time inline processing.
+
 ### Future Work
 
 - Multi-class attack classification (DoS, brute force, lateral movement, exfiltration, etc.)
@@ -538,6 +586,10 @@ Once an incident is established, a Markov chain model of observed kill chain tra
 - Longitudinal study of model accuracy improvement as analyst feedback accumulates
 - Graph-based alert correlation as an alternative to the current IP/temporal approach
 - Integration with commercial SIEM platforms (Splunk, Elastic) beyond Wazuh
+- Auto-population of simulation environment model from Wazuh agent inventory and vulnerability scans
+- DefenderAgent for red-vs-blue simulation (active defense response during campaigns)
+- Simulation benchmarking against MITRE CALDERA adversary emulation results
+- Reusable simulation framework extraction (standalone package for any SOC platform)
 
 ---
 
