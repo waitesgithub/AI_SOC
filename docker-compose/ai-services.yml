@@ -227,6 +227,11 @@ services:
       - "8600:8000"
     environment:
       - CORRELATION_DATABASE_URL=postgresql+asyncpg://ai_soc:${POSTGRES_PASSWORD:-ai_soc_password}@postgres:5432/ai_soc
+      - CORRELATION_SIMULATOR_OLLAMA_HOST=http://ollama:11434
+      - CORRELATION_SIMULATOR_OLLAMA_MODEL=llama3.2:3b
+      - CORRELATION_SIMULATOR_ENVIRONMENT_CONFIG=/app/config/default-environment.json
+    volumes:
+      - ../config/simulation/default-environment.json:/app/config/default-environment.json:ro
     networks:
       - ai-network
     depends_on:

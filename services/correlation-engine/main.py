@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import List, Optional
 
+from typing import Dict, Optional
 from fastapi import FastAPI, HTTPException, Query, Depends, Request, status
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -39,6 +40,8 @@ from models import (
 )
 from correlator import CorrelationEngine
 from predictor import AttackPredictor
+from simulator import CampaignSimulator, SimulationConfig
+from environment import Environment
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -430,6 +433,61 @@ async def update_incident_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update incident status: {str(exc)}",
         )
+
+
+@app.post("/simulate")
+async def run_simulation(
+    archetypes: Optional[List[str]] = None,
+    timesteps: int = Query(3, ge=1, le=10),
+    environment_json: Optional[Dict] = None,
+):
+    """
+    Run an attack campaign simulation against the infrastructure environment.
+
+    Spawns LLM-powered attacker agents with distinct behavioral archetypes
+    that attempt to progress through the kill chain. Returns a campaign report
+    with environment-specific predictions, defense validation, and recommended
+    preemptive actions.
+
+    Default: 4 archetypes (opportunist, apt, ransomware, insider) x 3 timesteps.
+    """
+    config = SimulationConfig(
+        agent_archetypes=archetypes or ["opportunist", "apt", "ransomware", "insider"],
+        timesteps=timesteps,
+        concurrency=settings.simulator_default_concurrency,
+        ollama_host=settings.simulator_ollama_host,
+        ollama_model=settings.simulator_ollama_model,
+    )
+
+    # Load environment
+    try:
+        if environment_json:
+            env = Environment.from_dict(environment_json)
+        elif settings.simulator_environment_config:
+            env = Environment.load_from_json(settings.simulator_environment_config)
+        else:
+            # Try default config path
+            default_path = "/app/config/simulation/default-environment.json"
+            try:
+                env = Environment.load_from_json(default_path)
+            except FileNotFoundError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No environment config provided and default not found. "
+                    "Pass environment_json in the request body or set "
+                    "CORRELATION_SIMULATOR_ENVIRONMENT_CONFIG."
+                )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to load environment: {e}")
+
+    simulator = CampaignSimulator(config)
+
+    try:
+        report = await simulator.run(env)
+        return report
+    except Exception as e:
+        logger.error(f"Simulation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Simulation failed: {e}")
 
 
 @app.get("/predict/{kill_chain_stage}")

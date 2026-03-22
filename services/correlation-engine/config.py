@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     correlation_threshold: float = 0.6
     incident_auto_close_minutes: int = 60
 
+    # Attack Campaign Simulator
+    simulator_enabled: bool = True
+    simulator_ollama_host: str = "http://ollama:11434"
+    simulator_ollama_model: str = "llama3.2:3b"
+    simulator_default_timesteps: int = 3
+    simulator_default_concurrency: int = 3
+    simulator_environment_config: str = ""
+
     # Logging / Server
     log_level: str = "INFO"
     host: str = "0.0.0.0"
