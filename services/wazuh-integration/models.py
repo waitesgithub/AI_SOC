@@ -119,6 +119,12 @@ class EnrichedAlert(BaseModel):
     similar_incidents: Optional[List[str]] = Field(None, description="Similar past incidents")
     kb_references: Optional[List[str]] = Field(None, description="Knowledge base articles")
 
+    # Correlation Engine (incident grouping)
+    incident_id: Optional[str] = Field(None, description="Correlated incident ID")
+    incident_is_new: Optional[bool] = Field(None, description="Whether this created a new incident")
+    incident_alert_count: Optional[int] = Field(None, description="Total alerts in this incident")
+    kill_chain_stage: Optional[str] = Field(None, description="Current kill chain stage")
+
     # Processing metadata
     processing_timestamp: datetime = Field(default_factory=datetime.utcnow)
     rag_enrichment_applied: bool = False

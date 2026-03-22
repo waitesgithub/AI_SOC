@@ -21,12 +21,14 @@ class AIClient:
         self.settings = settings
         self.triage_url = settings.alert_triage_url
         self.rag_url = settings.rag_service_url
+        self.correlation_url = settings.correlation_engine_url
         self.ai_timeout = settings.ai_service_timeout
 
         logger.info(
             "ai_client_initialized",
             triage_url=self.triage_url,
-            rag_url=self.rag_url
+            rag_url=self.rag_url,
+            correlation_url=self.correlation_url,
         )
 
     def transform_wazuh_to_triage_format(self, wazuh_alert: WazuhAlert) -> Dict[str, Any]:
@@ -177,6 +179,55 @@ class AIClient:
                 error=str(e),
                 alert_id=alert_id,
                 # Don't fail the entire pipeline if RAG is unavailable
+            )
+            return None
+
+    async def correlate_alert(self, enriched_alert) -> Optional[Dict[str, Any]]:
+        """
+        Send an enriched alert to the Correlation Engine for incident grouping.
+
+        Args:
+            enriched_alert: EnrichedAlert instance after triage and RAG enrichment
+
+        Returns:
+            CorrelationResponse dict or None if the service is unavailable
+        """
+        try:
+            # Build correlation payload from enriched alert fields
+            correlation_data = {
+                "alert_id": enriched_alert.wazuh_alert_id,
+                "timestamp": enriched_alert.processing_timestamp.isoformat(),
+                "severity": enriched_alert.ai_severity,
+                "category": enriched_alert.ai_category,
+                "mitre_techniques": enriched_alert.kb_references or [],
+                "mitre_tactics": [],
+                "rule_description": enriched_alert.wazuh_rule_description,
+            }
+
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    f"{self.correlation_url}/correlate",
+                    json=correlation_data,
+                )
+                response.raise_for_status()
+
+                result = response.json()
+
+                logger.info(
+                    "correlation_complete",
+                    alert_id=enriched_alert.wazuh_alert_id,
+                    incident_id=result.get("incident_id"),
+                    is_new=result.get("is_new_incident"),
+                    score=result.get("correlation_score"),
+                )
+
+                return result
+
+        except Exception as exc:
+            logger.warning(
+                "correlation_failed",
+                alert_id=enriched_alert.wazuh_alert_id,
+                error=str(exc),
             )
             return None
 

@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # AI Service Endpoints
     alert_triage_url: str = "http://alert-triage:8000"
     rag_service_url: str = "http://rag-service:8000"
+    correlation_engine_url: str = "http://correlation-engine:8000"
 
     # RAG Enrichment Threshold
     rag_severity_threshold: int = 8  # Only enrich alerts with severity >= 8

@@ -36,6 +36,16 @@ AI_SERVICES = {
         "url": "http://localhost:8002",
         "label": "Wazuh Integration",
         "description": "SIEM alert forwarding and enrichment"
+    },
+    "feedback-service": {
+        "url": "http://localhost:8400",
+        "label": "Feedback Service",
+        "description": "Alert persistence and analyst feedback"
+    },
+    "correlation-engine": {
+        "url": "http://localhost:8600",
+        "label": "Correlation Engine",
+        "description": "Alert correlation and incident grouping"
     }
 }
 

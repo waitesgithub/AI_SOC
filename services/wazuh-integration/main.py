@@ -170,6 +170,17 @@ async def receive_wazuh_alert(alert: WazuhAlert):
             enriched_alert.mitre_context = "\n---\n".join(context_parts) if context_parts else None
             enriched_alert.kb_references = kb_refs if kb_refs else None
 
+        # Step 4: Correlate into incident
+        try:
+            correlation = await ai_client.correlate_alert(enriched_alert)
+            if correlation:
+                enriched_alert.incident_id = correlation.get("incident_id")
+                enriched_alert.incident_is_new = correlation.get("is_new_incident")
+                enriched_alert.incident_alert_count = correlation.get("incident_alert_count")
+                enriched_alert.kill_chain_stage = correlation.get("kill_chain_stage")
+        except Exception as e:
+            logger.warning("correlation_failed", error=str(e))
+
         logger.info(
             "alert_processing_complete",
             alert_id=alert.id,

@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     thehive_url: Optional[str] = None
     thehive_api_key: Optional[str] = None
 
+    # Feedback Service Integration
+    feedback_enabled: bool = True
+    feedback_service_url: str = "http://feedback-service:8000"
+
     # Performance Tuning
     max_concurrent_requests: int = 10
     request_timeout: int = 120

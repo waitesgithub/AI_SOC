@@ -6,11 +6,13 @@ Main application entrypoint for LLM-powered security alert triage.
 Receives alerts from Shuffle/Wazuh and returns structured analysis.
 """
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
 from typing import Dict, Any
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -166,6 +168,10 @@ async def analyze_alert(alert: SecurityAlert):
             f"severity={result.severity}, confidence={result.confidence:.2f}"
         )
 
+        # Persist alert + result to feedback service (fire-and-forget)
+        if settings.feedback_enabled:
+            asyncio.create_task(_persist_alert(alert, result))
+
         return result
 
     except HTTPException:
@@ -174,6 +180,33 @@ async def analyze_alert(alert: SecurityAlert):
         REQUEST_COUNT.labels(status="error").inc()
         logger.error(f"Unexpected error analyzing alert {alert.alert_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _persist_alert(alert: SecurityAlert, result: TriageResponse):
+    """Fire-and-forget: persist alert + triage result to feedback service."""
+    try:
+        payload = {
+            "alert_id": alert.alert_id,
+            "timestamp": alert.timestamp.isoformat() if alert.timestamp else None,
+            "source_ip": alert.source_ip,
+            "dest_ip": alert.dest_ip,
+            "rule_id": alert.rule_id,
+            "rule_description": alert.rule_description,
+            "rule_level": alert.rule_level,
+            "raw_alert": alert.model_dump(mode="json"),
+            "triage_result": result.model_dump(mode="json"),
+            "ai_severity": result.severity.value if hasattr(result.severity, 'value') else str(result.severity),
+            "ai_category": result.category.value if hasattr(result.category, 'value') else str(result.category),
+            "ai_confidence": result.confidence,
+            "ai_is_true_positive": result.is_true_positive,
+            "ml_prediction": result.ml_prediction,
+            "ml_confidence": result.ml_confidence,
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(f"{settings.feedback_service_url}/alerts", json=payload)
+        logger.debug(f"Alert {alert.alert_id} persisted to feedback service")
+    except Exception as e:
+        logger.warning(f"Failed to persist alert {alert.alert_id}: {e}")
 
 
 @app.post("/batch", response_model=Dict[str, Any])
