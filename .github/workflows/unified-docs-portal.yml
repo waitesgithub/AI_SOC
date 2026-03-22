@@ -66,11 +66,19 @@ jobs:
           cd ..
           echo "Fairness build complete."
 
-      - name: Copy Portal Landing Page
+      - name: Copy Portal Landing Page and Assets
         run: |
           echo "Copying portal landing page to root..."
           cp docs/portal-landing.html site/index.html
-          echo "Portal landing page deployed."
+
+          # Copy CSS and JS assets referenced by the landing page
+          mkdir -p site/stylesheets site/javascripts
+          cp docs/stylesheets/custom.css site/stylesheets/ 2>/dev/null || true
+          cp docs/stylesheets/premium-v2.css site/stylesheets/ 2>/dev/null || true
+          cp docs/javascripts/cinematic.js site/javascripts/ 2>/dev/null || true
+          cp docs/javascripts/custom.js site/javascripts/ 2>/dev/null || true
+
+          echo "Portal landing page and assets deployed."
 
       - name: Copy CNAME
         run: |
