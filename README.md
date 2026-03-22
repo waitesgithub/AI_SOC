@@ -9,7 +9,7 @@
 
 A security analyst in a mid-size enterprise receives thousands of alerts per day. The majority are noise. This platform compresses that noise into actionable intelligence: ML classifies network flows in under 5ms, a local LLM explains the alert in plain English, the RAG service maps it to MITRE ATT&CK, the correlation engine groups related events into incidents, analyst feedback feeds a continuous retraining loop, and the rule generator writes new Sigma detection rules for novel patterns. No security data leaves the network — the LLM runs locally via Ollama.
 
-This implementation is a research artifact built to empirically validate findings from the survey paper *"AI-Augmented SOC: A Survey of LLMs and Agents for Security Automation"* (Srinivas et al., CSUSB, 2025).
+This is a research implementation by Abdul Bari, co-author of the published survey paper *"AI-Augmented SOC: A Survey of LLMs and Agents for Security Automation"* ([Srinivas et al., Informatics, 2025](https://www.mdpi.com/2624-800X/5/4/95)), built to empirically validate the survey's findings.
 
 ---
 
@@ -252,7 +252,7 @@ The service generates a Sigma rule, back-tests it against the historical alert c
 
 ### Academic Foundation
 
-This implementation is a research artifact built in connection with the published survey paper:
+This implementation was built by Abdul Bari, one of the co-authors of the published survey paper:
 
 **"AI-Augmented SOC: A Survey of LLMs and Agents for Security Automation"**
 Srinivas, S., Kirk, B., Zendejas, J., Espino, M., Boskovich, M., Bari, A., Dajani, K., and Alzahrani, N.
