@@ -252,11 +252,13 @@ The service generates a Sigma rule, back-tests it against the historical alert c
 
 ### Academic Foundation
 
-This implementation is a research artifact built in connection with:
+This implementation is a research artifact built in connection with the published survey paper:
 
 **"AI-Augmented SOC: A Survey of LLMs and Agents for Security Automation"**
 Srinivas, S., Kirk, B., Zendejas, J., Espino, M., Boskovich, M., Bari, A., Dajani, K., and Alzahrani, N.
-School of Computer Science and Engineering, California State University, San Bernardino, 2025.
+*Informatics*, vol. 5, no. 4, article 95, 2025. MDPI.
+
+**Published:** [https://www.mdpi.com/2624-800X/5/4/95](https://www.mdpi.com/2624-800X/5/4/95)
 
 The survey conducted a systematic literature review using PRISMA methodology, reviewing 500+ academic papers published between 2022-2025, with 100 sources selected from IEEE Xplore, arXiv, and the ACM Digital Library. The study analyzed the application of Large Language Models and autonomous AI agents to security operations center automation.
 
@@ -573,8 +575,13 @@ If this implementation or the associated survey contributes to your research:
   author       = {Srinivas, Siddhant and Kirk, Brandon and Zendejas, Julissa and
                   Espino, Michael and Boskovich, Matthew and Bari, Abdul and
                   Dajani, Khalil and Alzahrani, Nabeel},
-  institution  = {California State University, San Bernardino},
-  year         = {2025}
+  journal      = {Informatics},
+  volume       = {5},
+  number       = {4},
+  article      = {95},
+  year         = {2025},
+  publisher    = {MDPI},
+  url          = {https://www.mdpi.com/2624-800X/5/4/95}
 }
 ```
 
