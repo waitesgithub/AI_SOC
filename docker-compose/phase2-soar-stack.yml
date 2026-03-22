@@ -101,6 +101,15 @@ services:
   # ============================================================================
   # THEHIVE 5.x
   # ============================================================================
+  thehive-init:
+    image: strangebee/thehive:5.2.9
+    container_name: soar-thehive-init
+    entrypoint: ["sh", "-c", "chown -R thehive:thehive /opt/thehive/data /opt/thehive/index"]
+    user: "root"
+    volumes:
+      - thehive-data:/opt/thehive/data
+      - thehive-index:/opt/thehive/index
+
   thehive:
     image: strangebee/thehive:5.2.9
     container_name: soar-thehive
@@ -139,6 +148,8 @@ services:
       - cassandra
       - --index-backend
       - lucene
+      - --index-directory
+      - /opt/thehive/index
       - --s3-endpoint
       - http://minio:9000
       - --s3-access-key
