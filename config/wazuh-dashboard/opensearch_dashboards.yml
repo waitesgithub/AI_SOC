@@ -21,10 +21,6 @@ opensearch.requestHeadersWhitelist: ["securitytenant","Authorization"]
 opensearch_security.multitenancy.enabled: false
 opensearch_security.readonly_mode.roles: ["kibana_read_only"]
 
-# Disable telemetry
-telemetry.enabled: false
-telemetry.optIn: false
-
 # Logging
 logging.dest: stdout
 logging.silent: false
@@ -34,9 +30,3 @@ logging.verbose: false
 # Performance
 opensearch.requestTimeout: 60000
 opensearch.shardTimeout: 60000
-
-# Wazuh app configuration
-wazuh.monitoring.enabled: true
-wazuh.monitoring.frequency: 900
-wazuh.monitoring.shards: 1
-wazuh.monitoring.replicas: 0

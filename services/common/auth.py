@@ -398,23 +398,3 @@ def generate_secret_key() -> str:
         str: 64-character random secret key
     """
     return secrets.token_urlsafe(64)
-
-
-# Development: Default API keys for testing
-# TODO: Remove in production
-DEVELOPMENT_API_KEYS = {
-    "aisoc_dev_admin": {
-        "user_id": "admin",
-        "scopes": ["read", "write", "admin"],
-        "created_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(days=365),
-        "is_active": True
-    },
-    "aisoc_dev_readonly": {
-        "user_id": "readonly",
-        "scopes": ["read"],
-        "created_at": datetime.utcnow(),
-        "expires_at": datetime.utcnow() + timedelta(days=365),
-        "is_active": True
-    }
-}

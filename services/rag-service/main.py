@@ -8,6 +8,7 @@ Provides semantic search over security knowledge base.
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -16,6 +17,9 @@ from pydantic import BaseModel, Field
 from vector_store import VectorStore
 from embeddings import EmbeddingEngine
 from knowledge_base import KnowledgeBaseManager
+
+# Default runbooks directory (relative to this file)
+RUNBOOKS_DIR = str(Path(__file__).parent / "runbooks")
 
 # Configure logging
 logging.basicConfig(
@@ -251,6 +255,99 @@ async def ingest_mitre():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/ingest/cve")
+async def ingest_cve(severity: str = "CRITICAL"):
+    """
+    Ingest CVE vulnerability database from NVD API v2.
+
+    Queries the NVD API for CRITICAL (and optionally HIGH) severity CVEs
+    and ingests them into the cve_database ChromaDB collection.
+
+    **Query Parameters:**
+    - `severity`: Filter level - "CRITICAL" (default) or "HIGH" (fetches both CRITICAL and HIGH)
+
+    **Rate limits:** NVD allows 5 requests/30s without API key. Large ingestions take time.
+
+    **Returns:**
+        Ingestion status with count of CVEs ingested
+    """
+    if severity not in ("CRITICAL", "HIGH"):
+        raise HTTPException(
+            status_code=400,
+            detail="severity must be 'CRITICAL' or 'HIGH'"
+        )
+    try:
+        logger.info(f"Starting CVE ingestion with severity filter: {severity}")
+        result = await kb_manager.ingest_cve_database(severity_filter=severity)
+        if result.get("status") == "error":
+            raise HTTPException(status_code=500, detail=result.get("message"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CVE ingestion failed: {e}")
+        logger.exception(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/ingest/runbooks")
+async def ingest_runbooks(runbooks_dir: Optional[str] = None):
+    """
+    Ingest security runbooks from markdown files.
+
+    Parses runbook markdown files, splits them into sections, and embeds
+    them into the security_runbooks ChromaDB collection.
+
+    **Query Parameters:**
+    - `runbooks_dir`: Path to runbooks directory (default: services/rag-service/runbooks/)
+
+    **Returns:**
+        Ingestion status with count of runbooks and sections ingested
+    """
+    target_dir = runbooks_dir or RUNBOOKS_DIR
+    try:
+        logger.info(f"Starting runbook ingestion from: {target_dir}")
+        result = await kb_manager.ingest_security_runbooks(runbooks_dir=target_dir)
+        if result.get("status") == "error":
+            raise HTTPException(status_code=500, detail=result.get("message"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Runbook ingestion failed: {e}")
+        logger.exception(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/update/{collection}")
+async def update_collection(collection: str):
+    """
+    Update a knowledge base collection by re-ingesting from source.
+
+    Deletes the existing collection and re-ingests fresh data.
+
+    **Path Parameters:**
+    - `collection`: Collection name to update (mitre_attack, cve_database, security_runbooks)
+
+    **Returns:**
+        Update status with ingestion details
+    """
+    supported = ["mitre_attack", "cve_database", "security_runbooks"]
+    if collection not in supported:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported collection: {collection}. Supported: {', '.join(supported)}"
+        )
+    try:
+        logger.info(f"Starting collection update: {collection}")
+        result = await kb_manager.update_knowledge_base(collection)
+        return result
+    except Exception as e:
+        logger.error(f"Collection update failed for {collection}: {e}")
+        logger.exception(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -258,11 +355,14 @@ async def root():
         "service": "rag-service",
         "version": "1.0.0",
         "status": "production",
-        "note": "Full RAG implementation with ChromaDB and MITRE ATT&CK",
+        "note": "Full RAG implementation with ChromaDB, MITRE ATT&CK, CVE database, and security runbooks",
         "endpoints": {
             "retrieve": "/retrieve",
             "ingest": "/ingest",
             "ingest_mitre": "/ingest/mitre",
+            "ingest_cve": "/ingest/cve",
+            "ingest_runbooks": "/ingest/runbooks",
+            "update_collection": "/update/{collection}",
             "collections": "/collections",
             "health": "/health",
             "docs": "/docs"

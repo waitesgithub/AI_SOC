@@ -90,8 +90,8 @@ services:
       - wazuh-manager-logs:/var/ossec/logs
       - wazuh-manager-etc:/var/ossec/etc
       - ../config/wazuh-manager/certs:/etc/ssl:ro
-      # ossec.conf mount disabled - using container defaults (custom config causing XML parse errors)
-      # - ../config/wazuh-manager/ossec.conf:/wazuh-config-mount/etc/ossec.conf:ro
+      # Mount ossec.conf to the Wazuh config-mount path (merged on container start)
+      - ../config/wazuh-manager/ossec.conf:/wazuh-config-mount/etc/ossec.conf:ro
       - ../datasets/logs:/var/log/external:ro
 
     networks:
