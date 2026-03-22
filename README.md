@@ -1,15 +1,30 @@
 # AI-Augmented Security Operations Center (AI-SOC)
 
-### A Research Implementation of Machine Learning-Enhanced Intrusion Detection and Security Automation
+### 4 AI hackers tried to break into a network. In 30 seconds, they found the 3 vulnerabilities that actually matter.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Docker](https://img.shields.io/badge/docker-required-blue.svg)](https://www.docker.com/)
 [![CICIDS2017](https://img.shields.io/badge/dataset-CICIDS2017-green.svg)](https://www.unb.ca/cic/datasets/ids-2017.html)
 
-A security analyst in a mid-size enterprise receives thousands of alerts per day. The majority are noise. This platform compresses that noise into actionable intelligence: ML classifies network flows in under 5ms, a local LLM explains the alert in plain English, the RAG service maps it to MITRE ATT&CK, the correlation engine groups related events into incidents, analyst feedback feeds a continuous retraining loop, and the rule generator writes new Sigma detection rules for novel patterns. No security data leaves the network — the LLM runs locally via Ollama.
+Your vulnerability scanner found 847 CVEs. Which ones actually matter?
 
-This is a research implementation by Abdul Bari, co-author of the published survey paper *"AI-Augmented SOC: A Survey of LLMs and Agents for Security Automation"* ([Srinivas et al., Informatics, 2025](https://www.mdpi.com/2624-800X/5/4/95)), built to empirically validate the survey's findings.
+This platform spawns LLM-powered attacker agents — an opportunist, an APT operator, a ransomware crew, and a malicious insider — and runs them against a model of your real infrastructure. In 30 seconds, it tells you exactly how you'll be breached, through which specific chain of vulnerabilities, and what to fix first. Not generic threat intelligence. Predictions specific to YOUR network, YOUR defenses, YOUR patch status.
+
+It also runs a full AI-powered SOC: ML detects threats at 99.28% accuracy in under 5ms, a local LLM explains alerts in plain English with MITRE ATT&CK mapping, related alerts are correlated into incidents with kill chain tracking, analyst feedback continuously retrains the models, and the system writes its own Sigma detection rules for novel attack patterns. Everything runs locally — no security data leaves the network.
+
+```bash
+# See how your network would be breached
+curl -X POST http://localhost:8600/simulate?timesteps=3
+
+# Get per-host risk scores based on simulation results
+curl http://localhost:8600/risk-scores
+
+# Generate a synthetic attack campaign dataset (for research)
+curl -X POST "http://localhost:8600/simulate/generate-dataset?runs=100"
+```
+
+Built by Abdul Bari, co-author of the published survey paper *"AI-Augmented SOC: A Survey of LLMs and Agents for Security Automation"* ([Srinivas et al., Informatics, 2025](https://www.mdpi.com/2624-800X/5/4/95)).
 
 ---
 
