@@ -42,6 +42,9 @@ from correlator import CorrelationEngine
 from predictor import AttackPredictor
 from simulator import CampaignSimulator, SimulationConfig
 from environment import Environment
+from dataset_generator import DatasetGenerator
+from wazuh_environment import WazuhEnvironmentBuilder
+from risk_scorer import RiskScorer
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -107,6 +110,10 @@ async def lifespan(app: FastAPI):
         # Graceful degradation: service starts but reports DB as unavailable
         logger.warning("Database not available at startup: %s", exc)
         app.state.predictor = AttackPredictor()
+
+    # Initialize risk scorer
+    app.state.risk_scorer = RiskScorer()
+    logger.info("Risk scorer initialized")
 
     yield
 
@@ -490,6 +497,224 @@ async def run_simulation(
         raise HTTPException(status_code=500, detail=f"Simulation failed: {e}")
 
 
+@app.post("/simulate/generate-dataset")
+async def generate_dataset(
+    runs: int = Query(10, ge=1, le=500, description="Number of simulation runs"),
+    timesteps: int = Query(3, ge=1, le=10, description="Timesteps per run"),
+    environment_json: Optional[Dict] = None,
+):
+    """
+    Run N simulations with randomized environments and collect all traces into
+    a structured dataset.
+
+    Produces a novel dataset of attacker decision-making capturing strategy,
+    reasoning, and outcomes across diverse infrastructure configurations.
+
+    Note: This is a long-running endpoint. For large runs (>50) consider running
+    dataset_generator.py directly via the CLI.
+    """
+    # Load base environment
+    try:
+        if environment_json:
+            base_env_dict = environment_json
+        elif settings.simulator_environment_config:
+            import json as _json
+            with open(settings.simulator_environment_config) as fh:
+                base_env_dict = _json.load(fh)
+        else:
+            default_path = "/app/config/simulation/default-environment.json"
+            try:
+                import json as _json
+                with open(default_path) as fh:
+                    base_env_dict = _json.load(fh)
+            except FileNotFoundError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No environment config provided and default not found. "
+                           "Pass environment_json in the request body or set "
+                           "CORRELATION_SIMULATOR_ENVIRONMENT_CONFIG.",
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to load environment: {exc}")
+
+    generator = DatasetGenerator(
+        ollama_host=settings.simulator_ollama_host,
+        ollama_model=settings.simulator_ollama_model,
+        concurrency=settings.simulator_default_concurrency,
+    )
+
+    try:
+        dataset = await generator.generate(
+            num_runs=runs,
+            base_environment=base_env_dict,
+            timesteps=timesteps,
+        )
+        return dataset
+    except Exception as exc:
+        logger.error("Dataset generation failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Dataset generation failed: {exc}")
+
+
+@app.post("/simulate/environment/from-wazuh")
+async def environment_from_wazuh():
+    """
+    Query the Wazuh Manager API to automatically build an Environment model
+    from the real infrastructure.
+
+    Reads Wazuh credentials from CORRELATION_WAZUH_API_URL,
+    CORRELATION_WAZUH_API_USERNAME, and CORRELATION_WAZUH_API_PASSWORD
+    environment variables.
+
+    Returns the generated environment JSON which can be saved and used for
+    future simulations by passing it as environment_json in POST /simulate.
+    """
+    if not settings.wazuh_api_password:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Wazuh API password not configured. "
+                "Set CORRELATION_WAZUH_API_PASSWORD environment variable."
+            ),
+        )
+
+    builder = WazuhEnvironmentBuilder(
+        wazuh_url=settings.wazuh_api_url,
+        username=settings.wazuh_api_username,
+        password=settings.wazuh_api_password,
+        verify_ssl=settings.wazuh_api_verify_ssl,
+    )
+
+    try:
+        environment = await builder.build_environment()
+        env_dict = builder.to_dict(environment)
+        return {
+            "status": "success",
+            "hosts_discovered": len(environment.hosts),
+            "segments_built": len(environment.segments),
+            "environment": env_dict,
+        }
+    except Exception as exc:
+        logger.error("Wazuh environment build failed: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to build environment from Wazuh: {exc}",
+        )
+
+
+@app.get("/risk-scores")
+async def get_risk_scores(request: Request):
+    """
+    Return per-host risk scores sorted by risk score descending.
+
+    Scores are computed from all simulations ingested since startup or the
+    last refresh. Call POST /risk-scores/refresh to populate.
+    """
+    scorer: RiskScorer = getattr(request.app.state, "risk_scorer", None)
+    if scorer is None:
+        raise HTTPException(status_code=503, detail="Risk scorer not initialized")
+
+    scores = scorer.compute_risk_scores()
+    return {"hosts": [s.to_dict() for s in scores], "total": len(scores)}
+
+
+@app.get("/risk-scores/{host_ip:path}")
+async def get_risk_score_for_host(host_ip: str, request: Request):
+    """
+    Return detailed risk score for a specific host IP address.
+    """
+    scorer: RiskScorer = getattr(request.app.state, "risk_scorer", None)
+    if scorer is None:
+        raise HTTPException(status_code=503, detail="Risk scorer not initialized")
+
+    scores = scorer.compute_risk_scores()
+    for score in scores:
+        if score.host_ip == host_ip:
+            return score.to_dict()
+
+    raise HTTPException(status_code=404, detail=f"Host '{host_ip}' not found in risk scores")
+
+
+@app.get("/risk-summary")
+async def get_risk_summary(request: Request):
+    """
+    Overall risk summary with security posture rating (A-F), highest-risk
+    hosts, most common attack technique, and most effective defense.
+    """
+    scorer: RiskScorer = getattr(request.app.state, "risk_scorer", None)
+    if scorer is None:
+        raise HTTPException(status_code=503, detail="Risk scorer not initialized")
+
+    return scorer.get_risk_summary()
+
+
+@app.post("/risk-scores/refresh")
+async def refresh_risk_scores(
+    request: Request,
+    runs: int = Query(5, ge=1, le=50, description="Number of simulations to run"),
+    environment_json: Optional[Dict] = None,
+):
+    """
+    Run N simulations and ingest the results into the risk scorer.
+
+    Updates the persistent risk score state used by GET /risk-scores and
+    GET /risk-summary. Returns the updated summary after ingestion.
+    """
+    scorer: RiskScorer = getattr(request.app.state, "risk_scorer", None)
+    if scorer is None:
+        raise HTTPException(status_code=503, detail="Risk scorer not initialized")
+
+    # Load environment
+    try:
+        if environment_json:
+            env = Environment.from_dict(environment_json)
+        elif settings.simulator_environment_config:
+            env = Environment.load_from_json(settings.simulator_environment_config)
+        else:
+            default_path = "/app/config/simulation/default-environment.json"
+            try:
+                env = Environment.load_from_json(default_path)
+            except FileNotFoundError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No environment config provided and default not found.",
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to load environment: {exc}")
+
+    config = SimulationConfig(
+        agent_archetypes=["opportunist", "apt", "ransomware", "insider"],
+        timesteps=settings.simulator_default_timesteps,
+        concurrency=settings.simulator_default_concurrency,
+        ollama_host=settings.simulator_ollama_host,
+        ollama_model=settings.simulator_ollama_model,
+    )
+    simulator = CampaignSimulator(config)
+
+    completed = 0
+    for _ in range(runs):
+        try:
+            report = await simulator.run(env)
+            scorer.ingest_simulation(report)
+            completed += 1
+        except Exception as exc:
+            logger.warning("Risk score refresh: simulation run failed: %s", exc)
+
+    logger.info(
+        "Risk score refresh complete: %d/%d simulations succeeded, "
+        "total history=%d",
+        completed, runs, scorer.simulation_count,
+    )
+
+    summary = scorer.get_risk_summary()
+    summary["refresh_completed"] = completed
+    summary["refresh_requested"] = runs
+    return summary
+
+
 @app.get("/predict/{kill_chain_stage}")
 async def predict_next_stage(kill_chain_stage: str, top_k: int = Query(3, ge=1, le=5)):
     """
@@ -563,6 +788,13 @@ async def root():
             "active_incidents": "GET /incidents/active",
             "incident_detail": "GET /incidents/{incident_id}",
             "update_status": "PUT /incidents/{incident_id}/status",
+            "simulate": "POST /simulate",
+            "generate_dataset": "POST /simulate/generate-dataset",
+            "environment_from_wazuh": "POST /simulate/environment/from-wazuh",
+            "risk_scores": "GET /risk-scores",
+            "risk_score_host": "GET /risk-scores/{host_ip}",
+            "risk_summary": "GET /risk-summary",
+            "risk_refresh": "POST /risk-scores/refresh",
             "health": "GET /health",
             "metrics": "GET /metrics",
             "docs": "GET /docs",

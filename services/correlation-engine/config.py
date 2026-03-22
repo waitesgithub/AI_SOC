@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     simulator_default_concurrency: int = 3
     simulator_environment_config: str = ""
 
+    # Wazuh Environment Auto-Population
+    wazuh_api_url: str = "https://wazuh-manager:55000"
+    wazuh_api_username: str = "wazuh-wui"
+    wazuh_api_password: str = ""  # From CORRELATION_WAZUH_API_PASSWORD
+    wazuh_api_verify_ssl: bool = False
+
     # Logging / Server
     log_level: str = "INFO"
     host: str = "0.0.0.0"
