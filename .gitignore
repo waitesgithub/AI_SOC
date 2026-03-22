@@ -26,6 +26,10 @@ env/
 ENV/
 .venv
 
+# AI tooling config
+.claude/
+.serena/
+
 # IDE
 .vscode/
 .idea/
