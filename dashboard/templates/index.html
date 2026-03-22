@@ -1281,51 +1281,50 @@ code, .mono { font-family: var(--font-mono); }
       <!-- Network Map -->
       <div class="network-map-panel">
         <div class="section-title" style="margin-bottom:14px;">Network Topology</div>
-
-        <div class="network-segment">
-          <div class="segment-label">DMZ</div>
-          <div class="host-grid">
-            <div class="host-card" id="host-web-server-01">
-              <div class="host-name">web-server-01</div>
-              <div class="host-ip">10.0.0.10</div>
-              <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
-            </div>
-            <div class="host-card" id="host-mail-server-01">
-              <div class="host-name">mail-server-01</div>
-              <div class="host-ip">10.0.0.20</div>
-              <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="network-segment">
-          <div class="segment-label">Internal</div>
-          <div class="host-grid">
-            <div class="host-card" id="host-workstation-01">
-              <div class="host-name">workstation-01</div>
-              <div class="host-ip">10.0.1.10</div>
-              <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
-            </div>
-            <div class="host-card" id="host-file-server-01">
-              <div class="host-name">file-server-01</div>
-              <div class="host-ip">10.0.1.20</div>
-              <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+        <div id="network-topology-content">
+          <div class="network-segment">
+            <div class="segment-label">DMZ</div>
+            <div class="host-grid">
+              <div class="host-card" id="host-web-server-01">
+                <div class="host-name">web-server-01</div>
+                <div class="host-ip">10.0.0.10</div>
+                <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+              </div>
+              <div class="host-card" id="host-mail-server-01">
+                <div class="host-name">mail-server-01</div>
+                <div class="host-ip">10.0.0.20</div>
+                <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div class="network-segment" style="margin-bottom:0">
-          <div class="segment-label">Critical</div>
-          <div class="host-grid">
-            <div class="host-card" id="host-prod-db-01">
-              <div class="host-name">prod-db-01</div>
-              <div class="host-ip">10.0.2.10</div>
-              <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+          <div class="network-segment">
+            <div class="segment-label">Internal</div>
+            <div class="host-grid">
+              <div class="host-card" id="host-workstation-01">
+                <div class="host-name">workstation-01</div>
+                <div class="host-ip">10.0.1.10</div>
+                <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+              </div>
+              <div class="host-card" id="host-file-server-01">
+                <div class="host-name">file-server-01</div>
+                <div class="host-ip">10.0.1.20</div>
+                <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+              </div>
             </div>
-            <div class="host-card" id="host-dc-01">
-              <div class="host-name">dc-01</div>
-              <div class="host-ip">10.0.2.20</div>
-              <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+          </div>
+          <div class="network-segment" style="margin-bottom:0">
+            <div class="segment-label">Critical</div>
+            <div class="host-grid">
+              <div class="host-card" id="host-prod-db-01">
+                <div class="host-name">prod-db-01</div>
+                <div class="host-ip">10.0.2.10</div>
+                <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+              </div>
+              <div class="host-card" id="host-dc-01">
+                <div class="host-name">dc-01</div>
+                <div class="host-ip">10.0.2.20</div>
+                <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1343,6 +1342,13 @@ code, .mono { font-family: var(--font-mono); }
             </button>
             <input class="timestep-input" type="number" id="sim-timesteps" value="3" min="1" max="10">
             <span class="timestep-label">timesteps</span>
+          </div>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+              <input type="checkbox" id="sim-use-wazuh" checked style="accent-color:var(--accent);cursor:pointer;">
+              <span>Use live Wazuh infrastructure</span>
+            </label>
+            <span id="sim-env-badge" style="font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(88,166,255,0.15);color:var(--accent);display:none;"></span>
           </div>
           <div id="sim-status-row" class="hidden">
             <div class="sim-status">
@@ -1432,7 +1438,7 @@ code, .mono { font-family: var(--font-mono); }
 <!-- ============================================================
      JAVASCRIPT
      ============================================================ -->
-<script>
+{% raw %}<script>
 // ── CONSTANTS ────────────────────────────────────────────────
 const ANALYST_ID = 'analyst-1';
 const KILL_CHAIN_STAGES = ['RECON','ACCESS','EXEC','PERSIST','PRIV ESC','LATERAL','COLLECT','C2','EXFIL','IMPACT'];
@@ -2057,16 +2063,83 @@ async function markFalsePositive(alertId, btn) {
 }
 
 // ── SIMULATION ───────────────────────────────────────────────
+function renderWazuhTopology(envData) {
+  const topoEl = document.getElementById('network-topology-content');
+  if (!topoEl || !envData) return;
+  const hosts = envData.hosts || {};
+  const segments = envData.segments || {};
+  let html = '';
+  if (Object.keys(segments).length > 0) {
+    for (const [segName, seg] of Object.entries(segments)) {
+      html += `<div class="network-segment"><div class="segment-label">${escHtml(segName)}</div><div class="host-grid">`;
+      for (const ip of (seg.hosts || [])) {
+        const h = hosts[ip] || {};
+        const svcCount = (h.services || []).length;
+        const cveCount = (h.services || []).reduce((n, s) => n + (s.cves || []).length, 0);
+        const defenses = h.defenses || {};
+        const defList = Object.entries(defenses).filter(([,v]) => v).map(([k]) => k.replace(/_/g,' ')).slice(0, 3);
+        html += `<div class="host-card" id="host-${escHtml(h.hostname || ip)}">
+          <div class="host-name">${escHtml(h.hostname || ip)}</div>
+          <div class="host-ip">${escHtml(ip)}</div>
+          <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">
+            ${svcCount} service${svcCount !== 1 ? 's' : ''}${cveCount > 0 ? ` · <span style="color:var(--critical);">${cveCount} CVE${cveCount !== 1 ? 's' : ''}</span>` : ''}
+          </div>
+          ${defList.length > 0 ? `<div style="font-size:10px;color:var(--success);margin-top:2px;">${defList.join(', ')}</div>` : ''}
+          <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div>
+        </div>`;
+      }
+      html += '</div></div>';
+    }
+  } else {
+    for (const [ip, h] of Object.entries(hosts)) {
+      html += `<div class="network-segment"><div class="segment-label">${escHtml(h.hostname || ip)}</div><div class="host-grid">`;
+      const svcCount = (h.services || []).length;
+      const cveCount = (h.services || []).reduce((n, s) => n + (s.cves || []).length, 0);
+      html += `<div class="host-card"><div class="host-name">${escHtml(h.hostname || ip)}</div><div class="host-ip">${escHtml(ip)}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">${svcCount} service${svcCount !== 1 ? 's' : ''}${cveCount > 0 ? ` · <span style="color:var(--critical);">${cveCount} CVE${cveCount !== 1 ? 's' : ''}</span>` : ''}</div>
+        <div class="host-risk-bar-wrap"><div class="host-risk-bar" style="width:0%"></div></div></div>`;
+      html += '</div></div>';
+    }
+  }
+  topoEl.innerHTML = html;
+}
+
 async function runSimulation() {
   const btn = document.getElementById('btn-sim');
   const timesteps = parseInt(document.getElementById('sim-timesteps').value) || 3;
   const statusRow = document.getElementById('sim-status-row');
   const resultsEl = document.getElementById('sim-results');
+  const useWazuh = document.getElementById('sim-use-wazuh')?.checked;
+  const envBadge = document.getElementById('sim-env-badge');
 
   btn.classList.add('running');
   btn.disabled = true;
   btn.innerHTML = `<div class="spinner"></div> Simulating...`;
   statusRow.classList.remove('hidden');
+
+  // Step 1: If Wazuh toggle is on, fetch real infrastructure first
+  let environmentJson = null;
+  let envSource = 'sample';
+  if (useWazuh) {
+    resultsEl.innerHTML = `<div style="padding:16px;color:var(--text-secondary);line-height:1.8;">
+      <div style="font-size:15px;color:var(--accent);margin-bottom:8px;"><div class="spinner" style="display:inline-block;width:12px;height:12px;border-top-color:var(--accent);vertical-align:middle;margin-right:6px;"></div> Fetching live infrastructure from Wazuh...</div>
+      <div style="font-size:12px;color:var(--text-muted);">Querying Wazuh Manager API for real agents, CVEs, services, and defenses.</div>
+    </div>`;
+    const wazuhRes = await apiFetch('/api/simulate/environment/from-wazuh', { method: 'POST' });
+    if (wazuhRes.ok && wazuhRes.data?.environment) {
+      environmentJson = wazuhRes.data.environment;
+      envSource = 'wazuh';
+      const hostCount = wazuhRes.data.hosts_discovered || 0;
+      if (envBadge) { envBadge.textContent = `${hostCount} live host(s)`; envBadge.style.display = 'inline'; envBadge.style.background = 'rgba(63,185,80,0.15)'; envBadge.style.color = 'var(--success)'; }
+      renderWazuhTopology(environmentJson);
+    } else {
+      if (envBadge) { envBadge.textContent = 'Wazuh unavailable — using sample'; envBadge.style.display = 'inline'; envBadge.style.background = 'rgba(248,81,73,0.15)'; envBadge.style.color = 'var(--critical)'; }
+    }
+  } else {
+    if (envBadge) { envBadge.textContent = 'sample environment'; envBadge.style.display = 'inline'; envBadge.style.background = 'rgba(139,148,158,0.15)'; envBadge.style.color = 'var(--text-muted)'; }
+  }
+
+  // Step 2: Run the simulation
   resultsEl.innerHTML = `
     <div style="padding:16px;color:var(--text-secondary);line-height:1.8;">
       <div style="font-size:15px;color:var(--text-primary);margin-bottom:8px;">What's happening right now:</div>
@@ -2074,13 +2147,19 @@ async function runSimulation() {
       <div>2. <strong>APT Operator</strong> — careful recon, targeting high-value assets, avoiding detection</div>
       <div>3. <strong>Ransomware Crew</strong> — aggressive lateral movement, maximum host compromise</div>
       <div>4. <strong>Insider Threat</strong> — using legitimate access to reach sensitive data</div>
-      <div style="margin-top:12px;color:var(--text-muted);font-size:12px;">Each agent makes decisions via AI against your actual network configuration. This takes 30-120 seconds depending on timesteps.</div>
+      <div style="margin-top:12px;color:var(--text-muted);font-size:12px;">
+        ${envSource === 'wazuh' ? 'Attacking <strong style="color:var(--success);">real Wazuh infrastructure</strong>' : 'Attacking <strong>sample environment</strong> (6 hosts)'}
+        — each agent makes AI decisions via LLM. This takes 30-120 seconds depending on timesteps.
+      </div>
     </div>`;
+
+  const simBody = { timesteps };
+  if (environmentJson) simBody.environment_json = environmentJson;
 
   const res = await apiFetch(`/api/simulate?timesteps=${timesteps}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ timesteps }),
+    body: JSON.stringify(simBody),
   });
 
   btn.classList.remove('running');
@@ -2397,6 +2476,6 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
-</script>
+</script>{% endraw %}
 </body>
 </html>

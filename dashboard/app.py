@@ -351,6 +351,11 @@ def simulate():
     return _proxy("http://localhost:8600/simulate", method="POST", timeout=TIMEOUT_LONG)
 
 
+@app.route("/api/simulate/environment/from-wazuh", methods=["POST"])
+def simulate_env_from_wazuh():
+    return _proxy("http://localhost:8600/simulate/environment/from-wazuh", method="POST", timeout=TIMEOUT_LONG)
+
+
 @app.route("/api/risk-scores")
 def risk_scores():
     return _proxy("http://localhost:8600/risk-scores", timeout=TIMEOUT_STD)
