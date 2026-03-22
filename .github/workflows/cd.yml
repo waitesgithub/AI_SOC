@@ -142,9 +142,11 @@ jobs:
           echo "Waiting for ChromaDB..."
           timeout 60 bash -c 'until docker compose -f docker-compose/ai-services.yml ps chromadb | grep -q "healthy\|Up"; do sleep 3; done' || true
 
-          # Start remaining AI services (skip Ollama and wazuh-integration in CI)
-          docker compose -f docker-compose/ai-services.yml up -d ml-inference rag-service alert-triage
-          echo "AI services started"
+          # Start AI services without Ollama dependency (Ollama too large for CI)
+          # Use --no-deps to skip Ollama health check requirement
+          docker compose -f docker-compose/ai-services.yml up -d --no-deps ml-inference rag-service
+          docker compose -f docker-compose/ai-services.yml up -d --no-deps alert-triage
+          echo "AI services started (Ollama skipped in CI)"
 
       - name: Wait for services to be healthy
         run: |
