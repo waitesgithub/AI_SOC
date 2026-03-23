@@ -371,6 +371,21 @@ def simulate_swarm_result(swarm_id):
     return _proxy(f"http://localhost:8600/simulate/swarm/{swarm_id}/result", timeout=TIMEOUT_STD)
 
 
+@app.route("/api/simulate/swarm/trend")
+def simulate_swarm_trend():
+    return _proxy("http://localhost:8600/simulate/swarm/trend", timeout=TIMEOUT_STD)
+
+
+@app.route("/api/simulate/research/metrics")
+def simulate_research_metrics():
+    return _proxy("http://localhost:8600/simulate/research/metrics", timeout=TIMEOUT_STD)
+
+
+@app.route("/api/simulate/research/export", methods=["POST"])
+def simulate_research_export():
+    return _proxy("http://localhost:8600/simulate/research/export", method="POST", timeout=TIMEOUT_STD)
+
+
 @app.route("/api/simulate/<simulation_id>/chat", methods=["POST"])
 def simulate_chat(simulation_id):
     return _proxy(f"http://localhost:8600/simulate/{simulation_id}/chat", method="POST", timeout=TIMEOUT_LONG)

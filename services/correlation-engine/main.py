@@ -51,6 +51,8 @@ from pydantic import BaseModel
 from archetypes import ARCHETYPE_PROMPTS
 from defender_archetypes import DEFENDER_ARCHETYPE_PROMPTS
 from swarm import SwarmSimulator, SwarmConfig
+from history_store import HistoryStore
+from research_metrics import compute_all_metrics, export_for_paper, prediction_accuracy
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -128,7 +130,13 @@ async def lifespan(app: FastAPI):
     # Initialize swarm store and task tracker
     app.state.swarm_store = OrderedDict()
     app.state.swarm_tasks = {}
-    logger.info("Swarm store initialized")
+    import os
+    history_dir = os.environ.get(
+        "SWARM_HISTORY_DIR",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"),
+    )
+    app.state.history_store = HistoryStore(data_dir=history_dir)
+    logger.info("Swarm store and history initialized")
 
     yield
 
@@ -884,12 +892,19 @@ async def start_swarm_simulation(
     async def _run_swarm():
         try:
             report = await simulator.run(env)
-            # Store result
+            # Store in memory
             store = getattr(app.state, "swarm_store", None)
             if store is not None:
                 store[report["swarm_id"]] = report
                 while len(store) > 5:
                     store.popitem(last=False)
+            # Persist to history (for trends + research)
+            hist = getattr(app.state, "history_store", None)
+            if hist:
+                hist.append(report, trigger="manual", env_snapshot=env.snapshot())
+                spike = hist.detect_risk_spike()
+                if spike:
+                    logger.warning(f"RISK SPIKE DETECTED: {spike}")
             return report
         except Exception as e:
             logger.error(f"Swarm simulation failed: {e}", exc_info=True)
@@ -965,6 +980,42 @@ async def swarm_result(swarm_id: str):
         raise HTTPException(status_code=202, detail="Swarm simulation still running")
 
     raise HTTPException(status_code=404, detail=f"Swarm '{swarm_id}' not found")
+
+
+# ---------------------------------------------------------------------------
+# Risk Trends & Research Metrics
+# ---------------------------------------------------------------------------
+
+
+@app.get("/simulate/swarm/trend")
+async def swarm_trend(last_n: int = Query(50, ge=1, le=500)):
+    """Get time-series swarm results for risk trend visualization."""
+    hist = getattr(app.state, "history_store", None)
+    if not hist:
+        return {"snapshots": [], "spike_alert": None}
+
+    snapshots = hist.get_trend(last_n=last_n)
+    spike = hist.detect_risk_spike()
+    return {"snapshots": snapshots, "spike_alert": spike}
+
+
+@app.get("/simulate/research/metrics")
+async def research_metrics():
+    """Compute research paper metrics from stored swarm history."""
+    hist = getattr(app.state, "history_store", None)
+    if not hist:
+        raise HTTPException(status_code=503, detail="History store not available")
+    return compute_all_metrics(hist)
+
+
+@app.post("/simulate/research/export")
+async def research_export():
+    """Export CSV files for paper figures."""
+    hist = getattr(app.state, "history_store", None)
+    if not hist:
+        raise HTTPException(status_code=503, detail="History store not available")
+    files = export_for_paper(hist)
+    return {"exported_files": files, "count": len(files)}
 
 
 @app.post("/simulate/environment/from-wazuh")
