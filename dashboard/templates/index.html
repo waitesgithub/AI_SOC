@@ -1202,6 +1202,627 @@ code, .mono { font-family: var(--font-mono); }
   color: var(--text-muted);
   margin: 10px 0 6px;
 }
+
+/* Chat Panel */
+.chat-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  height: 100vh;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.5);
+}
+.chat-overlay.open { transform: translateX(0); }
+
+.chat-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+.chat-agent-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chat-agent-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+}
+.chat-agent-type {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.chat-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+}
+.chat-close:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.chat-bubble.user {
+  align-self: flex-end;
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-bottom-right-radius: 4px;
+}
+.chat-bubble.attacker {
+  align-self: flex-start;
+  background: var(--bg-card);
+  border-left: 3px solid var(--text-muted);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-typing {
+  align-self: flex-start;
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border-left: 3px solid var(--text-muted);
+}
+.chat-typing-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: chatTypingPulse 1.4s infinite;
+}
+.chat-typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.chat-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes chatTypingPulse {
+  0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
+  30% { opacity: 1; transform: scale(1); }
+}
+
+.chat-suggestions {
+  padding: 8px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+.chat-chip {
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.chat-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+.chat-input-row {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  background: var(--bg-card);
+  flex-shrink: 0;
+}
+.chat-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  outline: none;
+}
+.chat-input:focus { border-color: var(--accent); }
+.chat-send {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: #0a0e17;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.chat-send:hover { background: #79b8ff; }
+.chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* War-Game Replay */
+.wg-section {
+  margin-top: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.wg-section-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.wg-viewport {
+  position: relative;
+  min-height: 500px;
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(88,166,255,0.03) 0%, transparent 70%),
+    linear-gradient(rgba(42,58,74,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42,58,74,0.08) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+  overflow: hidden;
+}
+.wg-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+.wg-nodes-layer {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+.wg-node {
+  position: absolute;
+  pointer-events: all;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  transition: all 0.3s;
+}
+.wg-node-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: 3px solid var(--accent);
+  background: rgba(19,26,42,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 18px;
+  backdrop-filter: blur(4px);
+}
+.wg-node-ring.critical { width: 64px; height: 64px; border-width: 4px; }
+.wg-node-ring.high { width: 52px; height: 52px; }
+.wg-node-ring.medium { width: 44px; height: 44px; }
+.wg-node-ring.low { width: 38px; height: 38px; }
+
+.wg-node-ring.state-clean { border-color: var(--accent); box-shadow: 0 0 12px rgba(88,166,255,0.15), inset 0 0 8px rgba(88,166,255,0.05); }
+.wg-node-ring.state-scanned { border-color: var(--high); box-shadow: 0 0 16px rgba(210,153,34,0.4), 0 0 30px rgba(210,153,34,0.15), inset 0 0 10px rgba(210,153,34,0.1); }
+.wg-node-ring.state-compromised { border-color: var(--critical); box-shadow: 0 0 20px rgba(248,81,73,0.5), 0 0 40px rgba(248,81,73,0.2), inset 0 0 12px rgba(248,81,73,0.15); animation: wgNodeCompromised 2s ease-in-out infinite; }
+.wg-node-ring.state-admin { border-color: #ff3333; box-shadow: 0 0 24px rgba(255,51,51,0.6), 0 0 50px rgba(255,51,51,0.3), inset 0 0 15px rgba(255,51,51,0.2); animation: wgNodeAdmin 1.2s ease-in-out infinite; }
+
+@keyframes wgNodeCompromised {
+  0%, 100% { box-shadow: 0 0 20px rgba(248,81,73,0.5), 0 0 40px rgba(248,81,73,0.2); }
+  50% { box-shadow: 0 0 28px rgba(248,81,73,0.7), 0 0 56px rgba(248,81,73,0.3); }
+}
+@keyframes wgNodeAdmin {
+  0%, 100% { box-shadow: 0 0 24px rgba(255,51,51,0.6), 0 0 50px rgba(255,51,51,0.3); transform: scale(1); }
+  50% { box-shadow: 0 0 32px rgba(255,51,51,0.8), 0 0 64px rgba(255,51,51,0.4); transform: scale(1.05); }
+}
+
+.wg-node-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  white-space: nowrap;
+}
+.wg-node-ip {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.wg-segment-label {
+  position: absolute;
+  left: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.wg-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.wg-play-btn {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  color: #0a0e17;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+.wg-play-btn:hover { background: #79b8ff; }
+.wg-step-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.wg-step-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.wg-scrubber {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+.wg-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--bg-surface);
+}
+.wg-step-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 60px;
+  text-align: right;
+}
+
+.wg-speed-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.wg-legend {
+  display: flex;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-card);
+  flex-wrap: wrap;
+}
+.wg-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+.wg-legend-item:hover { background: var(--bg-card-hover); }
+.wg-legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+
+.wg-info-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 280px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  z-index: 10;
+  display: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.wg-info-panel.visible { display: block; }
+.wg-info-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.wg-info-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+.wg-info-row {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 3px 0;
+}
+.wg-info-row strong { color: var(--text-primary); }
+
+@keyframes wgDetectionRing {
+  0% { box-shadow: 0 0 0 0 rgba(88,166,255,0.6); }
+  100% { box-shadow: 0 0 0 20px rgba(88,166,255,0); }
+}
+.wg-detection-flash {
+  animation: wgDetectionRing 0.6s ease-out;
+}
+
+/* What-If Mode */
+.whatif-section {
+  margin-top: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.whatif-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.whatif-change-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(210,153,34,0.15);
+  color: var(--high);
+  display: none;
+}
+.whatif-change-badge.visible { display: inline-block; }
+.whatif-editor {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.whatif-host-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.whatif-host-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.whatif-host-ip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.whatif-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.whatif-toggle-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.whatif-toggle {
+  position: relative;
+  width: 36px; height: 20px;
+  cursor: pointer;
+}
+.whatif-toggle input {
+  opacity: 0;
+  width: 0; height: 0;
+}
+.whatif-toggle-slider {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--border);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+.whatif-toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  left: 2px; bottom: 2px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.whatif-toggle input:checked + .whatif-toggle-slider {
+  background: var(--accent);
+}
+.whatif-toggle input:checked + .whatif-toggle-slider::before {
+  transform: translateX(16px);
+  background: white;
+}
+.whatif-toggle-row.changed .whatif-toggle-slider {
+  background: var(--high) !important;
+}
+.whatif-toggle-row.changed .whatif-toggle input:checked + .whatif-toggle-slider {
+  background: var(--high) !important;
+}
+
+.whatif-actions-bar {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-surface);
+}
+.whatif-changes-list {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+/* What-If Comparison View */
+.whatif-comparison {
+  padding: 16px;
+  display: none;
+}
+.whatif-comparison.visible { display: block; }
+
+.whatif-deltas {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.whatif-delta-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+}
+.whatif-delta-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.whatif-delta-values {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.whatif-delta-arrow {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.whatif-delta-pct {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+.whatif-delta-pct.improved { color: var(--success); background: rgba(63,185,80,0.15); }
+.whatif-delta-pct.worsened { color: var(--critical); background: rgba(248,81,73,0.15); }
+.whatif-delta-pct.neutral { color: var(--text-muted); background: rgba(139,148,158,0.1); }
+
+.whatif-verdict {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.whatif-verdict.stopped { background: rgba(63,185,80,0.2); color: var(--success); }
+.whatif-verdict.hindered { background: rgba(210,153,34,0.2); color: var(--high); }
+.whatif-verdict.nochange { background: rgba(139,148,158,0.15); color: var(--text-muted); }
+
+.whatif-insight {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(88,166,255,0.08);
+  border: 1px solid rgba(88,166,255,0.2);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Defender node states */
+.wg-node-ring.state-isolated {
+  border-color: #58a6ff;
+  border-style: dashed;
+  box-shadow: 0 0 20px rgba(88,166,255,0.5), inset 0 0 12px rgba(88,166,255,0.2);
+  animation: wgNodeIsolated 2s ease-in-out infinite;
+}
+@keyframes wgNodeIsolated {
+  0%, 100% { box-shadow: 0 0 20px rgba(88,166,255,0.5); }
+  50% { box-shadow: 0 0 28px rgba(88,166,255,0.7); }
+}
+.wg-node-ring.state-shielded {
+  border-color: #3fb950;
+  box-shadow: 0 0 16px rgba(63,185,80,0.4), 0 0 30px rgba(63,185,80,0.15);
+}
+.wg-node-shield {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: rgba(63,185,80,0.9);
+  color: #fff;
+  font-size: 10px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+.wg-node-shield.visible { display: flex; }
 </style>
 </head>
 <body>
@@ -1434,6 +2055,24 @@ code, .mono { font-family: var(--font-mono); }
 
 <!-- Toast container -->
 <div id="toast-container"></div>
+
+<!-- Chat Overlay Panel -->
+<div class="chat-overlay" id="chat-overlay">
+  <div class="chat-header">
+    <div class="chat-agent-dot" id="chat-agent-dot"></div>
+    <div>
+      <div class="chat-agent-name" id="chat-agent-name">Agent</div>
+      <div class="chat-agent-type" id="chat-agent-type">Archetype</div>
+    </div>
+    <button class="chat-close" onclick="closeChatPanel()">&times;</button>
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-suggestions" id="chat-suggestions"></div>
+  <div class="chat-input-row">
+    <input class="chat-input" id="chat-input" type="text" placeholder="Ask the attacker..." onkeydown="if(event.key==='Enter')sendChatMessage()">
+    <button class="chat-send" id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+  </div>
+</div>
 
 <!-- ============================================================
      JAVASCRIPT
@@ -2244,8 +2883,61 @@ async function runSimulation() {
       html += `<div style="font-size:12px;color:var(--text-muted);padding:8px 0 0 16px;">No actions recorded</div>`;
     }
 
+    html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:8px;">
+      <button class="btn btn-ghost btn-sm" onclick="openChatPanel('${escHtml(d.simulation_id)}', '${escHtml(a.agent_id)}', '${escHtml(archetype)}')">Talk to Attacker</button>
+    </div>`;
     html += `</div>`;
   });
+
+  // Defender response section
+  if (d.defender_campaigns && d.defender_campaigns.length) {
+    html += `<div style="margin-top:24px;padding-top:16px;border-top:2px solid rgba(88,166,255,0.3);">
+      <div style="font-size:14px;font-weight:700;color:#58a6ff;margin-bottom:12px;letter-spacing:1px;">
+        DEFENSE RESPONSE
+      </div>`;
+
+    // Defender summary card
+    const ds = d.defender_summary || {};
+    html += `<div style="margin-bottom:16px;padding:12px;background:rgba(88,166,255,0.08);border:1px solid rgba(88,166,255,0.3);border-radius:8px;">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--text-secondary);">
+        <div><span style="color:#3fb950;font-weight:700;">${ds.attacks_prevented || 0}</span> attacks prevented</div>
+        <div><span style="color:#58a6ff;font-weight:700;">${(ds.hosts_isolated || []).length}</span> hosts isolated</div>
+        <div><span style="color:#a371f7;font-weight:700;">${(ds.ips_blocked || []).length}</span> IPs blocked</div>
+        <div><span style="color:#3fb950;font-weight:700;">${(ds.edr_deployed || []).length}</span> EDR deployed</div>
+        ${ds.credentials_revoked ? '<div style="color:#3fb950;font-weight:700;">Credentials revoked</div>' : ''}
+      </div>
+    </div>`;
+
+    // Per-defender campaign cards
+    d.defender_campaigns.forEach(dc => {
+      const dcColor = AGENT_COLORS[dc.archetype] || '#58a6ff';
+      const dPath = dc.defense_path || [];
+
+      html += `<div style="margin-bottom:16px;padding:14px;background:var(--bg-card);border-radius:8px;border-left:4px solid ${dcColor};">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:14px;font-weight:600;color:${dcColor};text-transform:uppercase;">&#128737; ${escHtml(dc.archetype)}</div>
+          <div style="font-size:11px;color:#3fb950;">${dc.successful_blocks || 0} blocks</div>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">${dc.actions_taken || 0} actions taken</div>`;
+
+      dPath.forEach(step => {
+        const rc = step.result === 'success' ? 'var(--success)' : 'var(--text-muted)';
+        html += `<div style="padding:8px 0 8px 16px;border-left:2px solid ${dcColor};margin-left:8px;margin-bottom:4px;">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">Turn ${(step.timestep||0)+1} &mdash; ${escHtml(step.action)} on <span style="font-family:var(--font-mono);color:var(--accent);">${escHtml(step.target)}</span></div>
+          <div style="font-size:12px;color:var(--text-secondary);font-style:italic;margin-bottom:3px;">"${escHtml(step.reasoning || '')}"</div>
+          <div style="font-size:11px;"><span style="color:${rc};font-weight:600;">${(step.result||'').toUpperCase()}</span></div>
+        </div>`;
+      });
+
+      // Talk to Defender button
+      html += `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" style="border-color:rgba(88,166,255,0.3);color:#58a6ff;" onclick="openChatPanel('${escHtml(d.simulation_id)}', '${escHtml(dc.agent_id)}', '${escHtml(dc.archetype)}')">Talk to Defender</button>
+      </div>`;
+      html += `</div>`;
+    });
+
+    html += `</div>`;
+  }
 
   // Weakest points
   if (weaknesses.length) {
@@ -2277,6 +2969,25 @@ async function runSimulation() {
   }
 
   resultsEl.innerHTML = html;
+
+  // Initialize war-game replay
+  if (d.environment) {
+    WarGameReplay.init(d);
+  }
+
+  // Initialize what-if mode
+  const whatIfEnv = environmentJson || d.environment;
+  if (whatIfEnv) {
+    renderWhatIfEditor(d, whatIfEnv);
+  } else {
+    // Try fetching default environment for sample mode
+    apiFetch('/api/environment/default').then(envRes => {
+      if (envRes.ok && envRes.data && envRes.data.hosts) {
+        renderWhatIfEditor(d, envRes.data);
+      }
+    });
+  }
+
   toast('Simulation complete — see attacker narratives below', 'success');
 }
 
@@ -2460,6 +3171,1196 @@ function toggleFooter() {
 function escHtml(s) {
   if (typeof s !== 'string') s = String(s);
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── CHAT WITH ATTACKER ──────────────────────────────────────
+const AGENT_COLORS = { opportunist: '#d29922', apt: '#f85149', ransomware: '#bc4dff', insider: '#ff6e40', soc_analyst: '#58a6ff', incident_responder: '#3fb950', threat_hunter: '#a371f7' };
+const chatState = { simulationId: null, agentId: null, archetype: null, sending: false };
+
+const CHAT_SUGGESTIONS = [
+  "Why did you target that host?",
+  "What would have stopped you?",
+  "What was your overall strategy?",
+  "What defenses worried you most?",
+  "Why didn't you go after the domain controller?",
+  "How would you attack differently next time?",
+];
+
+const DEFENDER_ARCHETYPES = ['soc_analyst', 'incident_responder', 'threat_hunter'];
+const DEFENDER_CHAT_SUGGESTIONS = [
+  "Why did you isolate that host?",
+  "What alerts concerned you most?",
+  "What would you do with more resources?",
+  "How did you prioritize threats?",
+];
+
+function openChatPanel(simId, agentId, archetype) {
+  chatState.simulationId = simId;
+  chatState.agentId = agentId;
+  chatState.archetype = archetype;
+  chatState.sending = false;
+
+  const isDefender = DEFENDER_ARCHETYPES.includes(archetype);
+  const color = AGENT_COLORS[archetype] || 'var(--text-muted)';
+  document.getElementById('chat-agent-dot').style.background = color;
+  document.getElementById('chat-agent-name').textContent = agentId;
+  document.getElementById('chat-agent-type').textContent = archetype.toUpperCase() + (isDefender ? ' DEFENDER' : ' AGENT');
+  document.getElementById('chat-messages').innerHTML = '';
+
+  // Set archetype color on attacker bubbles
+  document.getElementById('chat-overlay').dataset.archetype = archetype;
+
+  // Show suggestions based on agent side
+  const suggestions = isDefender ? DEFENDER_CHAT_SUGGESTIONS : CHAT_SUGGESTIONS;
+  const sugEl = document.getElementById('chat-suggestions');
+  sugEl.innerHTML = suggestions.slice(0, 4).map(s =>
+    `<div class="chat-chip" onclick="sendSuggestion(this)">${escHtml(s)}</div>`
+  ).join('');
+
+  document.getElementById('chat-overlay').classList.add('open');
+  document.getElementById('chat-input').focus();
+
+  // Add welcome message
+  if (isDefender) {
+    addChatBubble(`I'm the ${archetype.replace(/_/g, ' ')} from simulation ${simId}. Ask me about my defense decisions, how I prioritized threats, what I would do differently, or why I took specific actions.`, 'attacker', archetype);
+  } else {
+    addChatBubble(`I'm the ${archetype} agent from simulation ${simId}. Ask me anything about my attack campaign — my strategy, what I targeted, what stopped me, or what would stop me next time.`, 'attacker', archetype);
+  }
+}
+
+function closeChatPanel() {
+  document.getElementById('chat-overlay').classList.remove('open');
+  chatState.simulationId = null;
+}
+
+function sendSuggestion(el) {
+  document.getElementById('chat-input').value = el.textContent;
+  sendChatMessage();
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg || chatState.sending || !chatState.simulationId) return;
+
+  chatState.sending = true;
+  input.value = '';
+  document.getElementById('chat-send-btn').disabled = true;
+
+  addChatBubble(msg, 'user', chatState.archetype);
+  showTypingIndicator();
+
+  const res = await apiFetch(`/api/simulate/${chatState.simulationId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agent_id: chatState.agentId, message: msg }),
+  });
+
+  hideTypingIndicator();
+  chatState.sending = false;
+  document.getElementById('chat-send-btn').disabled = false;
+
+  if (res.ok && res.data.response) {
+    addChatBubble(res.data.response, 'attacker', chatState.archetype);
+  } else {
+    addChatBubble('I couldn\'t process that. The LLM may be unavailable.', 'attacker', chatState.archetype);
+  }
+
+  document.getElementById('chat-input').focus();
+}
+
+function addChatBubble(text, role, archetype) {
+  const el = document.createElement('div');
+  const color = AGENT_COLORS[archetype] || 'var(--text-muted)';
+  el.className = `chat-bubble ${role}`;
+  if (role === 'attacker') {
+    el.style.borderLeftColor = color;
+  }
+  el.textContent = text;
+  const container = document.getElementById('chat-messages');
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+function showTypingIndicator() {
+  const el = document.createElement('div');
+  el.className = 'chat-typing';
+  el.id = 'chat-typing-indicator';
+  const color = AGENT_COLORS[chatState.archetype] || 'var(--text-muted)';
+  el.style.borderLeftColor = color;
+  el.innerHTML = '<div class="chat-typing-dot"></div><div class="chat-typing-dot"></div><div class="chat-typing-dot"></div>';
+  const container = document.getElementById('chat-messages');
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+}
+
+function hideTypingIndicator() {
+  const el = document.getElementById('chat-typing-indicator');
+  if (el) el.remove();
+}
+
+// ── WAR-GAME REPLAY ─────────────────────────────────────────
+const WarGameReplay = {
+  canvas: null,
+  ctx: null,
+  nodesLayer: null,
+  viewport: null,
+  infoPanel: null,
+  environment: null,
+  campaigns: null,
+  allSteps: [],
+  nodePositions: {},
+  nodeElements: {},
+  nodeStates: {},
+  currentStep: -1,
+  totalSteps: 0,
+  playing: false,
+  speed: 1,
+  animationId: null,
+  lastStepTime: 0,
+  activePulses: [],
+
+  init(report) {
+    this.environment = report.environment || {};
+    this.campaigns = report.campaigns || [];
+    this.allSteps = [];
+    this.activePulses = [];
+    this.currentStep = -1;
+    this.playing = false;
+
+    // Flatten all attack steps and sort by timestep
+    this.campaigns.forEach(c => {
+      (c.attack_path || []).forEach(step => {
+        this.allSteps.push({
+          ...step,
+          agent_id: c.agent_id,
+          archetype: c.archetype,
+          side: 'attacker',
+        });
+      });
+    });
+
+    // Add defender steps from defender_campaigns
+    this.defenderCampaigns = report.defender_campaigns || [];
+    this.defenderCampaigns.forEach(dc => {
+      (dc.defense_path || []).forEach(step => {
+        this.allSteps.push({
+          ...step,
+          agent_id: dc.agent_id,
+          archetype: dc.archetype,
+          side: 'defender',
+        });
+      });
+    });
+
+    this.allSteps.sort((a, b) => a.timestep - b.timestep);
+    this.totalSteps = this.allSteps.length;
+
+    // Render the wargame section
+    this.renderSection();
+    this.computeLayout();
+    this.buildNodes();
+    this.resizeCanvas();
+    this.renderFrame();
+
+    // Auto-play the replay after a brief pause
+    setTimeout(() => this.play(), 800);
+
+    // Scroll the wargame into view
+    const section = document.getElementById('wg-section');
+    if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Listen for window resize
+    window.addEventListener('resize', () => {
+      this.resizeCanvas();
+      this.computeLayout();
+      this.repositionNodes();
+      this.renderFrame();
+    });
+  },
+
+  renderSection() {
+    // Create or reuse the wargame section
+    let section = document.getElementById('wg-section');
+    if (section) section.remove();
+
+    section = document.createElement('div');
+    section.id = 'wg-section';
+    section.className = 'wg-section';
+    section.innerHTML = `
+      <div class="wg-section-header" style="background:linear-gradient(90deg,rgba(248,81,73,0.08),rgba(188,77,255,0.05),transparent);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:10px;height:10px;border-radius:50%;background:var(--critical);animation:pulse-critical 1.5s infinite;"></div>
+          <div class="section-title" style="margin:0;color:var(--critical);letter-spacing:3px;">WAR-GAME REPLAY</div>
+        </div>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">${this.totalSteps} actions across ${this.campaigns.length} attacker${this.defenderCampaigns.length ? ' + ' + this.defenderCampaigns.length + ' defender' : ''} agents</span>
+      </div>
+      <div class="wg-viewport" id="wg-viewport">
+        <div id="wg-narration" style="position:absolute;top:0;left:0;right:0;z-index:5;padding:8px 16px;background:linear-gradient(180deg,rgba(10,14,23,0.9) 0%,transparent 100%);font-family:var(--font-mono);font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:8px;min-height:32px;">
+          <span id="wg-narration-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;"></span>
+          <span id="wg-narration-text">Initializing war-game replay...</span>
+        </div>
+        <canvas class="wg-canvas" id="wg-canvas"></canvas>
+        <div class="wg-nodes-layer" id="wg-nodes-layer"></div>
+        <div class="wg-info-panel" id="wg-info-panel">
+          <button class="wg-info-close" onclick="WarGameReplay.hideInfoPanel()">&times;</button>
+          <div id="wg-info-content"></div>
+        </div>
+      </div>
+      <div class="wg-controls">
+        <button class="wg-play-btn" id="wg-play-btn" onclick="WarGameReplay.togglePlay()">&#9654;</button>
+        <button class="wg-step-btn" onclick="WarGameReplay.stepBack()">&larr;</button>
+        <button class="wg-step-btn" onclick="WarGameReplay.stepForward()">Step &rarr;</button>
+        <input type="range" class="wg-scrubber" id="wg-scrubber" min="-1" max="${this.totalSteps - 1}" value="-1"
+          oninput="WarGameReplay.scrubTo(parseInt(this.value))">
+        <span class="wg-step-label" id="wg-step-label">Start</span>
+        <select class="wg-speed-select" onchange="WarGameReplay.speed=parseFloat(this.value)">
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+          <option value="4">4x</option>
+        </select>
+      </div>
+      <div class="wg-legend" id="wg-legend"></div>
+    `;
+
+    // Insert after sim-results
+    const simResults = document.getElementById('sim-results');
+    if (simResults && simResults.parentNode) {
+      simResults.parentNode.insertBefore(section, simResults.nextSibling);
+    }
+
+    this.viewport = document.getElementById('wg-viewport');
+    this.canvas = document.getElementById('wg-canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.nodesLayer = document.getElementById('wg-nodes-layer');
+    this.infoPanel = document.getElementById('wg-info-panel');
+
+    // Build legend
+    const legendEl = document.getElementById('wg-legend');
+    const seen = new Set();
+    this.campaigns.forEach(c => {
+      if (!seen.has(c.archetype)) {
+        seen.add(c.archetype);
+        const color = AGENT_COLORS[c.archetype] || '#888';
+        legendEl.innerHTML += `<div class="wg-legend-item" onclick="WarGameReplay.showAgentInfo('${escHtml(c.agent_id)}')">
+          <div class="wg-legend-dot" style="background:${color}"></div>
+          <span>${escHtml(c.agent_id)}</span>
+        </div>`;
+      }
+    });
+    // Defender agent legend entries
+    const defSeen = new Set();
+    this.defenderCampaigns.forEach(dc => {
+      if (!defSeen.has(dc.archetype)) {
+        defSeen.add(dc.archetype);
+        const dColor = AGENT_COLORS[dc.archetype] || '#58a6ff';
+        legendEl.innerHTML += `<div class="wg-legend-item" onclick="WarGameReplay.showAgentInfo('${escHtml(dc.agent_id)}')">
+          <div class="wg-legend-dot" style="background:${dColor}"></div>
+          <span>${escHtml(dc.agent_id)}</span>
+        </div>`;
+      }
+    });
+
+    // Node state legend
+    legendEl.innerHTML += `
+      <div class="wg-legend-item"><div class="wg-legend-dot" style="background:var(--accent)"></div><span>Clean</span></div>
+      <div class="wg-legend-item"><div class="wg-legend-dot" style="background:var(--high)"></div><span>Scanned</span></div>
+      <div class="wg-legend-item"><div class="wg-legend-dot" style="background:var(--critical)"></div><span>Compromised</span></div>
+      <div class="wg-legend-item"><div class="wg-legend-dot" style="background:#58a6ff;border:2px dashed #58a6ff;background:transparent;"></div><span>Isolated</span></div>
+      <div class="wg-legend-item"><div class="wg-legend-dot" style="background:#3fb950"></div><span>Shielded</span></div>
+    `;
+  },
+
+  resizeCanvas() {
+    if (!this.canvas || !this.viewport) return;
+    const rect = this.viewport.getBoundingClientRect();
+    this.canvas.width = rect.width;
+    this.canvas.height = rect.height;
+  },
+
+  computeLayout() {
+    if (!this.viewport) return;
+    const w = this.viewport.offsetWidth;
+    const h = this.viewport.offsetHeight;
+    const segments = this.environment.segments || {};
+    const hosts = this.environment.hosts || {};
+    const segNames = Object.keys(segments);
+
+    // Vertical positions for segments
+    const segY = {};
+    const segOrder = ['dmz', 'external', 'internal', 'corporate', 'critical', 'server'];
+    const orderedSegs = segNames.sort((a, b) => {
+      const ai = segOrder.indexOf(a.toLowerCase());
+      const bi = segOrder.indexOf(b.toLowerCase());
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+    const yStep = h / (orderedSegs.length + 1);
+    orderedSegs.forEach((seg, i) => {
+      segY[seg] = yStep * (i + 1);
+    });
+
+    this.nodePositions = {};
+    orderedSegs.forEach(segName => {
+      const seg = segments[segName];
+      const hostIPs = seg.hosts || [];
+      const xStep = w / (hostIPs.length + 1);
+      hostIPs.forEach((ip, j) => {
+        this.nodePositions[ip] = { x: xStep * (j + 1), y: segY[segName], segment: segName };
+      });
+    });
+
+    // Handle hosts not in any segment
+    let orphanIdx = 0;
+    Object.keys(hosts).forEach(ip => {
+      if (!this.nodePositions[ip]) {
+        this.nodePositions[ip] = { x: 60 + orphanIdx * 100, y: h - 40, segment: 'unknown' };
+        orphanIdx++;
+      }
+    });
+  },
+
+  buildNodes() {
+    if (!this.nodesLayer) return;
+    this.nodesLayer.innerHTML = '';
+    this.nodeElements = {};
+    this.nodeStates = {};
+    const hosts = this.environment.hosts || {};
+    const segments = this.environment.segments || {};
+
+    // Segment labels
+    const drawnSegs = new Set();
+    Object.entries(this.nodePositions).forEach(([ip, pos]) => {
+      if (!drawnSegs.has(pos.segment)) {
+        drawnSegs.add(pos.segment);
+        const lbl = document.createElement('div');
+        lbl.className = 'wg-segment-label';
+        lbl.style.top = (pos.y - 40) + 'px';
+        lbl.textContent = pos.segment.toUpperCase();
+        this.nodesLayer.appendChild(lbl);
+      }
+    });
+
+    Object.entries(hosts).forEach(([ip, host]) => {
+      const pos = this.nodePositions[ip];
+      if (!pos) return;
+
+      const crit = host.criticality || 'medium';
+      const osIcon = (host.os || '').toLowerCase().includes('windows') ? '&#128187;' : '&#128421;';
+
+      const node = document.createElement('div');
+      node.className = 'wg-node';
+      node.style.left = pos.x + 'px';
+      node.style.top = pos.y + 'px';
+      node.onclick = () => this.showNodeInfo(ip);
+      node.innerHTML = `
+        <div style="position:relative;display:inline-block;">
+          <div class="wg-node-ring ${crit} state-clean" id="wg-ring-${ip.replace(/\./g,'-')}">${osIcon}</div>
+          <div class="wg-node-shield" id="wg-shield-${ip.replace(/\./g,'-')}">&#128737;</div>
+        </div>
+        <div class="wg-node-label">${escHtml(host.hostname || ip)}</div>
+        <div class="wg-node-ip">${escHtml(ip)}</div>
+      `;
+      this.nodesLayer.appendChild(node);
+      this.nodeElements[ip] = node;
+      this.nodeStates[ip] = 'clean';
+    });
+  },
+
+  repositionNodes() {
+    Object.entries(this.nodeElements).forEach(([ip, el]) => {
+      const pos = this.nodePositions[ip];
+      if (pos) {
+        el.style.left = pos.x + 'px';
+        el.style.top = pos.y + 'px';
+      }
+    });
+  },
+
+  stepTo(n) {
+    // State precedence: isolated(5) > shielded(4) > compromised(3) > scanned(2) > clean(1)
+    const STATE_PRIORITY = { clean: 1, scanned: 2, compromised: 3, shielded: 4, isolated: 5 };
+
+    // Reset all node states and shield visibility
+    Object.keys(this.nodeStates).forEach(ip => {
+      this.nodeStates[ip] = 'clean';
+      const shield = document.getElementById(`wg-shield-${ip.replace(/\./g, '-')}`);
+      if (shield) shield.classList.remove('visible');
+    });
+
+    // Replay from start to step n (cumulative)
+    for (let i = 0; i <= n && i < this.allSteps.length; i++) {
+      const step = this.allSteps[i];
+      const targetIP = step.target;
+      if (!targetIP || !this.nodeStates.hasOwnProperty(targetIP)) continue;
+
+      if (step.side === 'defender') {
+        // Defender actions
+        if (step.action === 'isolate_host' && step.result === 'success') {
+          const newPri = STATE_PRIORITY['isolated'] || 0;
+          const curPri = STATE_PRIORITY[this.nodeStates[targetIP]] || 0;
+          if (newPri >= curPri) {
+            this.nodeStates[targetIP] = 'isolated';
+          }
+        } else if (step.action === 'deploy_edr' || step.action === 'block_ip') {
+          const shield = document.getElementById(`wg-shield-${targetIP.replace(/\./g, '-')}`);
+          if (shield) shield.classList.add('visible');
+          const curPri = STATE_PRIORITY[this.nodeStates[targetIP]] || 0;
+          if (STATE_PRIORITY['shielded'] > curPri) {
+            this.nodeStates[targetIP] = 'shielded';
+          }
+        }
+      } else {
+        // Attacker actions — but isolated nodes stay isolated
+        if (this.nodeStates[targetIP] === 'isolated') continue;
+        if (step.result === 'success' || step.result === 'detected') {
+          const curPri = STATE_PRIORITY[this.nodeStates[targetIP]] || 0;
+          if (STATE_PRIORITY['compromised'] > curPri) {
+            this.nodeStates[targetIP] = 'compromised';
+          }
+        } else if (this.nodeStates[targetIP] === 'clean') {
+          this.nodeStates[targetIP] = 'scanned';
+        }
+      }
+    }
+
+    // Update DOM nodes
+    Object.entries(this.nodeStates).forEach(([ip, state]) => {
+      const ring = document.getElementById(`wg-ring-${ip.replace(/\./g, '-')}`);
+      if (ring) {
+        ring.className = ring.className.replace(/state-\w+/g, '').trim() + ` state-${state}`;
+      }
+    });
+
+    this.currentStep = n;
+
+    // Update controls
+    const scrubber = document.getElementById('wg-scrubber');
+    if (scrubber) scrubber.value = n;
+    const label = document.getElementById('wg-step-label');
+    if (label) {
+      if (n < 0) {
+        label.textContent = 'Start';
+      } else if (n < this.allSteps.length) {
+        const step = this.allSteps[n];
+        label.textContent = `${n + 1}/${this.totalSteps}`;
+      }
+    }
+
+    // Trigger pulse animation for current step + narration
+    if (n >= 0 && n < this.allSteps.length) {
+      const step = this.allSteps[n];
+      this.addPulse(step);
+      this.updateNarration(step);
+    } else {
+      this.updateNarration(null);
+    }
+
+    this.renderFrame();
+  },
+
+  updateNarration(step) {
+    const textEl = document.getElementById('wg-narration-text');
+    const dotEl = document.getElementById('wg-narration-dot');
+    if (!textEl || !dotEl) return;
+
+    if (!step) {
+      textEl.textContent = 'Initializing war-game replay...';
+      dotEl.style.background = 'var(--accent)';
+      return;
+    }
+
+    const color = AGENT_COLORS[step.archetype] || '#888';
+    dotEl.style.background = color;
+    const host = (this.environment.hosts || {})[step.target];
+    const hostname = host?.hostname || step.target;
+    const resultColors = { success: 'var(--success)', detected: 'var(--high)', blocked: 'var(--critical)', failure: 'var(--text-muted)' };
+    const resultLabel = (step.result || 'unknown').toUpperCase();
+    const rc = resultColors[step.result] || 'var(--text-muted)';
+
+    if (step.side === 'defender') {
+      textEl.innerHTML = `<span style="color:${color};font-weight:700;">&#128737; ${escHtml(step.agent_id)}</span> `
+        + `<span style="color:var(--text-muted);">&#8594;</span> `
+        + `<span style="color:#58a6ff;">${escHtml(step.action)}</span> on `
+        + `<span style="color:var(--text-primary);">${escHtml(hostname)}</span> `
+        + `<span style="color:var(--text-muted);">(${escHtml(step.target)})</span> `
+        + `&#8212; <span style="color:${rc};font-weight:700;">${resultLabel}</span>`;
+    } else {
+      textEl.innerHTML = `<span style="color:${color};font-weight:700;">${escHtml(step.agent_id)}</span> `
+        + `<span style="color:var(--text-muted);">&#8594;</span> `
+        + `<span style="color:var(--accent);">${escHtml(step.action)}</span> on `
+        + `<span style="color:var(--text-primary);">${escHtml(hostname)}</span> `
+        + `<span style="color:var(--text-muted);">(${escHtml(step.target)})</span> `
+        + `&#8212; <span style="color:${rc};font-weight:700;">${resultLabel}</span>`;
+    }
+  },
+
+  addPulse(step) {
+    // Find source position
+    const targetPos = this.nodePositions[step.target];
+    if (!targetPos) return;
+
+    let sourcePos;
+    const color = AGENT_COLORS[step.archetype] || '#888';
+
+    if (step.side === 'defender') {
+      // Defenders originate from bottom-center (SOC center)
+      sourcePos = { x: this.canvas.width / 2, y: this.canvas.height };
+    } else {
+      // Attacker: try to find previous compromised host of this agent, or use top-center
+      sourcePos = { x: this.canvas.width / 2, y: 0 };
+      const agentSteps = this.allSteps.filter(s => s.agent_id === step.agent_id);
+      const stepIdx = agentSteps.indexOf(step);
+      if (stepIdx > 0) {
+        const prevTarget = agentSteps[stepIdx - 1].target;
+        if (this.nodePositions[prevTarget]) {
+          sourcePos = this.nodePositions[prevTarget];
+        }
+      }
+    }
+
+    this.activePulses.push({
+      sx: sourcePos.x, sy: sourcePos.y,
+      tx: targetPos.x, ty: targetPos.y,
+      color,
+      result: step.result,
+      side: step.side || 'attacker',
+      progress: 0,
+      speed: 0.018 * this.speed,
+    });
+  },
+
+  renderFrame() {
+    if (!this.ctx || !this.canvas) return;
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Draw segment zone backgrounds
+    const segments = this.environment.segments || {};
+    const drawnSegs = {};
+    Object.values(this.nodePositions).forEach(pos => {
+      if (!drawnSegs[pos.segment]) drawnSegs[pos.segment] = [];
+      drawnSegs[pos.segment].push(pos);
+    });
+    Object.entries(drawnSegs).forEach(([seg, positions]) => {
+      const minY = Math.min(...positions.map(p => p.y)) - 30;
+      const maxY = Math.max(...positions.map(p => p.y)) + 30;
+      ctx.fillStyle = 'rgba(42, 58, 74, 0.15)';
+      ctx.fillRect(0, minY, w, maxY - minY);
+    });
+
+    // Draw reachability edges (faint)
+    Object.entries(segments).forEach(([segName, seg]) => {
+      (seg.reachable_from || []).forEach(fromSeg => {
+        const fromSegData = segments[fromSeg];
+        if (!fromSegData) return;
+        const fromHosts = fromSegData.hosts || [];
+        const toHosts = seg.hosts || [];
+        if (fromHosts.length && toHosts.length) {
+          // Draw a single representative edge between segment centers
+          const fx = fromHosts.reduce((s, ip) => s + (this.nodePositions[ip]?.x || 0), 0) / fromHosts.length;
+          const fy = fromHosts.reduce((s, ip) => s + (this.nodePositions[ip]?.y || 0), 0) / fromHosts.length;
+          const tx = toHosts.reduce((s, ip) => s + (this.nodePositions[ip]?.x || 0), 0) / toHosts.length;
+          const ty = toHosts.reduce((s, ip) => s + (this.nodePositions[ip]?.y || 0), 0) / toHosts.length;
+          ctx.beginPath();
+          ctx.moveTo(fx, fy);
+          ctx.lineTo(tx, ty);
+          ctx.strokeStyle = 'rgba(42, 58, 74, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      });
+    });
+
+    // Animate active pulses
+    const remaining = [];
+    this.activePulses.forEach(p => {
+      p.progress += p.speed;
+      if (p.progress > 1.1) return; // done (overshoot for arrival effect)
+
+      const progress = Math.min(p.progress, 1);
+      // Ease-in-out for smoother motion
+      const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      const x = p.sx + (p.tx - p.sx) * eased;
+      const y = p.sy + (p.ty - p.sy) * eased;
+
+      // Glowing trail line (drawn first, behind the pulse)
+      const grad = ctx.createLinearGradient(p.sx, p.sy, x, y);
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(0.6, p.color);
+      grad.addColorStop(1, p.color);
+      ctx.beginPath();
+      ctx.moveTo(p.sx, p.sy);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = grad;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Outer glow on trail
+      ctx.strokeStyle = p.color;
+      ctx.globalAlpha = 0.1;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Comet trail (6 particles, fading)
+      for (let t = 1; t <= 6; t++) {
+        const tp = Math.max(0, eased - t * 0.025);
+        const trailX = p.sx + (p.tx - p.sx) * tp;
+        const trailY = p.sy + (p.ty - p.sy) * tp;
+        const radius = 4 - t * 0.5;
+        const alpha = 0.5 - t * 0.07;
+        if (radius > 0 && alpha > 0) {
+          ctx.beginPath();
+          ctx.arc(trailX, trailY, radius, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = alpha;
+          ctx.fill();
+        }
+      }
+
+      if (p.progress <= 1) {
+        // Main pulse dot with glow
+        ctx.globalAlpha = 0.25;
+        ctx.beginPath();
+        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      } else {
+        // Arrival burst effect
+        const burst = (p.progress - 1) * 10; // 0 to 1
+        const burstAlpha = 1 - burst;
+        if (burstAlpha > 0) {
+          const burstColor = p.side === 'defender'
+            ? (p.result === 'success' ? '#3fb950' : '#58a6ff')
+            : (p.result === 'blocked' ? '#f85149' : p.result === 'success' ? p.color : '#58a6ff');
+          ctx.globalAlpha = burstAlpha * 0.4;
+          ctx.beginPath();
+          ctx.arc(p.tx, p.ty, 20 + burst * 30, 0, Math.PI * 2);
+          ctx.fillStyle = burstColor;
+          ctx.fill();
+          ctx.globalAlpha = burstAlpha * 0.6;
+          ctx.beginPath();
+          ctx.arc(p.tx, p.ty, 10 + burst * 15, 0, Math.PI * 2);
+          ctx.fillStyle = burstColor;
+          ctx.fill();
+        }
+      }
+
+      ctx.globalAlpha = 1;
+      remaining.push(p);
+    });
+    this.activePulses = remaining;
+
+    // Continue animation if pulses are active or playing
+    if (this.activePulses.length > 0 || this.playing) {
+      this.animationId = requestAnimationFrame(() => this.renderFrame());
+    }
+  },
+
+  togglePlay() {
+    if (this.playing) {
+      this.pause();
+    } else {
+      this.play();
+    }
+  },
+
+  play() {
+    this.playing = true;
+    document.getElementById('wg-play-btn').innerHTML = '&#9646;&#9646;';
+    this.lastStepTime = Date.now();
+    if (this.currentStep >= this.totalSteps - 1) {
+      this.currentStep = -1;
+    }
+    this._playLoop();
+  },
+
+  _playLoop() {
+    if (!this.playing) return;
+    const now = Date.now();
+    const interval = 1200 / this.speed;
+    if (now - this.lastStepTime >= interval) {
+      this.lastStepTime = now;
+      if (this.currentStep < this.totalSteps - 1) {
+        this.stepTo(this.currentStep + 1);
+      } else {
+        this.pause();
+        return;
+      }
+    }
+    // Also keep rendering pulses
+    this.renderFrame();
+    this.animationId = requestAnimationFrame(() => this._playLoop());
+  },
+
+  pause() {
+    this.playing = false;
+    document.getElementById('wg-play-btn').innerHTML = '&#9654;';
+    if (this.animationId) {
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
+    }
+  },
+
+  stepForward() {
+    if (this.currentStep < this.totalSteps - 1) {
+      this.stepTo(this.currentStep + 1);
+    }
+  },
+
+  stepBack() {
+    if (this.currentStep >= 0) {
+      this.activePulses = [];
+      this.stepTo(this.currentStep - 1);
+    }
+  },
+
+  scrubTo(n) {
+    this.activePulses = [];
+    this.stepTo(n);
+  },
+
+  showNodeInfo(ip) {
+    const host = (this.environment.hosts || {})[ip];
+    if (!host) return;
+    const state = this.nodeStates[ip] || 'clean';
+    const attacks = this.allSteps.filter(s => s.target === ip && this.allSteps.indexOf(s) <= this.currentStep);
+
+    let html = `<div class="wg-info-title">${escHtml(host.hostname || ip)}</div>`;
+    html += `<div class="wg-info-row"><strong>IP:</strong> ${escHtml(ip)}</div>`;
+    html += `<div class="wg-info-row"><strong>OS:</strong> ${escHtml(host.os || '?')}</div>`;
+    html += `<div class="wg-info-row"><strong>Criticality:</strong> ${escHtml(host.criticality || '?')}</div>`;
+    html += `<div class="wg-info-row"><strong>State:</strong> <span style="color:${state === 'compromised' ? 'var(--critical)' : state === 'scanned' ? 'var(--high)' : 'var(--accent)'}">${state.toUpperCase()}</span></div>`;
+
+    // Defenses
+    const def = host.defenses || {};
+    const defList = Object.entries(def).filter(([,v]) => v).map(([k]) => k.replace(/_/g,' '));
+    html += `<div class="wg-info-row"><strong>Defenses:</strong> ${defList.length ? defList.join(', ') : 'None'}</div>`;
+
+    // Services
+    const svcs = (host.services || []).map(s => `${s.name}:${s.port}`).join(', ');
+    html += `<div class="wg-info-row"><strong>Services:</strong> ${svcs || 'None'}</div>`;
+
+    // Attack history on this node
+    const attackActions = attacks.filter(a => a.side !== 'defender');
+    if (attackActions.length) {
+      html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">`;
+      html += `<div class="wg-info-row" style="font-weight:600;color:var(--text-primary);">Attack History (${attackActions.length})</div>`;
+      attackActions.forEach(a => {
+        const color = AGENT_COLORS[a.archetype] || '#888';
+        html += `<div class="wg-info-row" style="border-left:2px solid ${color};padding-left:6px;margin:4px 0;">
+          <span style="color:${color};font-weight:600;">${escHtml(a.agent_id)}</span>: ${escHtml(a.action)} →
+          <span style="color:${a.result === 'success' ? 'var(--success)' : a.result === 'blocked' ? 'var(--critical)' : 'var(--high)'}">${a.result}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Defense history on this node
+    const defenseActions = attacks.filter(a => a.side === 'defender');
+    if (defenseActions.length) {
+      html += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">`;
+      html += `<div class="wg-info-row" style="font-weight:600;color:#58a6ff;">Defense History (${defenseActions.length})</div>`;
+      defenseActions.forEach(a => {
+        const color = AGENT_COLORS[a.archetype] || '#58a6ff';
+        html += `<div class="wg-info-row" style="border-left:2px solid ${color};padding-left:6px;margin:4px 0;">
+          <span style="color:${color};font-weight:600;">&#128737; ${escHtml(a.agent_id)}</span>: ${escHtml(a.action)} →
+          <span style="color:${a.result === 'success' ? 'var(--success)' : 'var(--text-muted)'}">${a.result}</span>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    document.getElementById('wg-info-content').innerHTML = html;
+    this.infoPanel.classList.add('visible');
+  },
+
+  showAgentInfo(agentId) {
+    // Search attacker campaigns first, then defender campaigns
+    let campaign = this.campaigns.find(c => c.agent_id === agentId);
+    let isDefender = false;
+    if (!campaign) {
+      campaign = (this.defenderCampaigns || []).find(c => c.agent_id === agentId);
+      isDefender = true;
+    }
+    if (!campaign) return;
+    const color = AGENT_COLORS[campaign.archetype] || '#888';
+
+    let html = `<div class="wg-info-title" style="color:${color}">${isDefender ? '&#128737; ' : ''}${escHtml(agentId)}</div>`;
+    html += `<div class="wg-info-row"><strong>Archetype:</strong> ${escHtml(campaign.archetype)}</div>`;
+    html += `<div class="wg-info-row"><strong>Side:</strong> ${isDefender ? '<span style="color:#58a6ff;">DEFENDER</span>' : '<span style="color:var(--critical);">ATTACKER</span>'}</div>`;
+
+    if (isDefender) {
+      html += `<div class="wg-info-row"><strong>Actions:</strong> ${campaign.actions_taken} taken, ${campaign.successful_blocks || 0} blocks</div>`;
+    } else {
+      html += `<div class="wg-info-row"><strong>Actions:</strong> ${campaign.actions_taken} taken, ${campaign.successful_actions} succeeded</div>`;
+      html += `<div class="wg-info-row"><strong>Detected:</strong> ${campaign.detected_actions}</div>`;
+      html += `<div class="wg-info-row"><strong>Compromised:</strong> ${(campaign.hosts_compromised || []).join(', ') || 'None'}</div>`;
+      html += `<div class="wg-info-row"><strong>Stage:</strong> ${escHtml(campaign.final_kill_chain_stage)}</div>`;
+    }
+
+    document.getElementById('wg-info-content').innerHTML = html;
+    this.infoPanel.classList.add('visible');
+  },
+
+  hideInfoPanel() {
+    this.infoPanel.classList.remove('visible');
+  },
+};
+
+// ── WHAT-IF MODE ─────────────────────────────────────────────
+let whatIfBaselineEnv = null;
+let whatIfBaselineResults = null;
+let whatIfModifiedEnv = null;
+let whatIfModifiedResults = null;
+
+function renderWhatIfEditor(report, envData) {
+  whatIfBaselineResults = report;
+  whatIfBaselineEnv = envData;
+  whatIfModifiedEnv = JSON.parse(JSON.stringify(envData || {}));
+  whatIfModifiedResults = null;
+
+  let section = document.getElementById('whatif-section');
+  if (section) section.remove();
+
+  if (!envData || !envData.hosts) return;
+
+  section = document.createElement('div');
+  section.id = 'whatif-section';
+  section.className = 'whatif-section';
+
+  let hostCards = '';
+  Object.entries(envData.hosts).forEach(([ip, host]) => {
+    const def = host.defenses || {};
+    const services = host.services || [];
+    const cves = services.flatMap(s => (s.cves || []).map(c => ({ svc: s.name, cve: c })));
+
+    hostCards += `<div class="whatif-host-card">
+      <div class="whatif-host-name">${escHtml(host.hostname || ip)}</div>
+      <div class="whatif-host-ip">${escHtml(ip)}</div>
+      <div class="whatif-toggle-row" data-ip="${escHtml(ip)}" data-defense="mfa_enabled">
+        <span class="whatif-toggle-label">MFA</span>
+        <label class="whatif-toggle">
+          <input type="checkbox" ${def.mfa_enabled ? 'checked' : ''} onchange="onWhatIfDefenseToggle(this)">
+          <span class="whatif-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="whatif-toggle-row" data-ip="${escHtml(ip)}" data-defense="edr_present">
+        <span class="whatif-toggle-label">EDR</span>
+        <label class="whatif-toggle">
+          <input type="checkbox" ${def.edr_present ? 'checked' : ''} onchange="onWhatIfDefenseToggle(this)">
+          <span class="whatif-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="whatif-toggle-row" data-ip="${escHtml(ip)}" data-defense="firewall_enabled">
+        <span class="whatif-toggle-label">Firewall</span>
+        <label class="whatif-toggle">
+          <input type="checkbox" ${def.firewall_enabled ? 'checked' : ''} onchange="onWhatIfDefenseToggle(this)">
+          <span class="whatif-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="whatif-toggle-row" data-ip="${escHtml(ip)}" data-defense="patched">
+        <span class="whatif-toggle-label">Patched</span>
+        <label class="whatif-toggle">
+          <input type="checkbox" ${def.patched ? 'checked' : ''} onchange="onWhatIfDefenseToggle(this)">
+          <span class="whatif-toggle-slider"></span>
+        </label>
+      </div>
+      ${cves.length ? `<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px;">
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">VULNERABILITIES</div>
+        ${cves.map(c => `<div class="whatif-toggle-row" data-ip="${escHtml(ip)}" data-svc="${escHtml(c.svc)}" data-cve="${escHtml(c.cve)}">
+          <span class="whatif-toggle-label" style="font-family:var(--font-mono);font-size:10px;color:var(--critical);">${escHtml(c.cve)}</span>
+          <label class="whatif-toggle">
+            <input type="checkbox" checked onchange="onWhatIfCveToggle(this)">
+            <span class="whatif-toggle-slider"></span>
+          </label>
+        </div>`).join('')}
+      </div>` : ''}
+    </div>`;
+  });
+
+  section.innerHTML = `
+    <div class="whatif-header">
+      <div class="section-title" style="margin:0;">What-If Analysis</div>
+      <span class="whatif-change-badge" id="whatif-change-badge">0 changes</span>
+    </div>
+    <div class="whatif-editor" id="whatif-editor">${hostCards}</div>
+    <div class="whatif-actions-bar">
+      <div class="whatif-changes-list" id="whatif-changes-list">Toggle defenses to explore "what if" scenarios</div>
+      <button class="btn btn-ghost btn-sm" onclick="resetWhatIf()">Reset</button>
+      <button class="btn btn-primary btn-sm" id="whatif-run-btn" onclick="runWhatIfSimulation()">Apply Changes &amp; Re-run</button>
+    </div>
+    <div class="whatif-comparison" id="whatif-comparison"></div>
+  `;
+
+  // Insert after wg-section if it exists, or after sim-results
+  const wgSection = document.getElementById('wg-section');
+  const simResults = document.getElementById('sim-results');
+  const insertAfter = wgSection || simResults;
+  if (insertAfter && insertAfter.parentNode) {
+    insertAfter.parentNode.insertBefore(section, insertAfter.nextSibling);
+  }
+}
+
+function onWhatIfDefenseToggle(el) {
+  const row = el.closest('.whatif-toggle-row');
+  const ip = row.dataset.ip;
+  const defense = row.dataset.defense;
+  if (!whatIfModifiedEnv || !whatIfModifiedEnv.hosts || !whatIfModifiedEnv.hosts[ip]) return;
+
+  whatIfModifiedEnv.hosts[ip].defenses[defense] = el.checked;
+
+  // Highlight changed toggles
+  const baseline = whatIfBaselineEnv.hosts[ip]?.defenses?.[defense];
+  if (el.checked !== baseline) {
+    row.classList.add('changed');
+  } else {
+    row.classList.remove('changed');
+  }
+  updateWhatIfChangeSummary();
+}
+
+function onWhatIfCveToggle(el) {
+  const row = el.closest('.whatif-toggle-row');
+  const ip = row.dataset.ip;
+  const svcName = row.dataset.svc;
+  const cve = row.dataset.cve;
+  if (!whatIfModifiedEnv || !whatIfModifiedEnv.hosts || !whatIfModifiedEnv.hosts[ip]) return;
+
+  const host = whatIfModifiedEnv.hosts[ip];
+  const service = (host.services || []).find(s => s.name === svcName);
+  if (!service) return;
+
+  if (el.checked) {
+    if (!service.cves.includes(cve)) service.cves.push(cve);
+  } else {
+    service.cves = service.cves.filter(c => c !== cve);
+  }
+
+  // Highlight
+  const baseService = (whatIfBaselineEnv.hosts[ip]?.services || []).find(s => s.name === svcName);
+  const baseCves = baseService?.cves || [];
+  const changed = el.checked !== baseCves.includes(cve);
+  if (changed) row.classList.add('changed');
+  else row.classList.remove('changed');
+
+  updateWhatIfChangeSummary();
+}
+
+function updateWhatIfChangeSummary() {
+  const changes = [];
+  if (!whatIfBaselineEnv || !whatIfModifiedEnv) return;
+
+  Object.entries(whatIfBaselineEnv.hosts || {}).forEach(([ip, baseHost]) => {
+    const modHost = whatIfModifiedEnv.hosts[ip];
+    if (!modHost) return;
+    const hostname = baseHost.hostname || ip;
+
+    // Defense changes
+    Object.entries(baseHost.defenses || {}).forEach(([k, v]) => {
+      const modV = modHost.defenses?.[k];
+      if (modV !== v) {
+        changes.push(`${modV ? 'Enable' : 'Disable'} ${k.replace(/_/g, ' ')} on ${hostname}`);
+      }
+    });
+
+    // CVE changes
+    (baseHost.services || []).forEach(svc => {
+      const modSvc = (modHost.services || []).find(s => s.name === svc.name);
+      if (!modSvc) return;
+      (svc.cves || []).forEach(cve => {
+        if (!(modSvc.cves || []).includes(cve)) {
+          changes.push(`Patch ${cve} on ${hostname}`);
+        }
+      });
+    });
+  });
+
+  const badge = document.getElementById('whatif-change-badge');
+  const listEl = document.getElementById('whatif-changes-list');
+  if (changes.length) {
+    badge.textContent = `${changes.length} change${changes.length > 1 ? 's' : ''}`;
+    badge.classList.add('visible');
+    listEl.textContent = changes.join(' · ');
+  } else {
+    badge.classList.remove('visible');
+    listEl.textContent = 'Toggle defenses to explore "what if" scenarios';
+  }
+}
+
+async function runWhatIfSimulation() {
+  if (!whatIfModifiedEnv) { toast('No environment to modify', 'warning'); return; }
+
+  const btn = document.getElementById('whatif-run-btn');
+  setButtonLoading(btn, true);
+
+  const timesteps = parseInt(document.getElementById('sim-timesteps').value) || 3;
+  const res = await apiFetch(`/api/simulate?timesteps=${timesteps}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timesteps, environment_json: whatIfModifiedEnv }),
+  });
+
+  setButtonLoading(btn, false);
+
+  if (!res.ok) {
+    toast('What-If simulation failed', 'error');
+    return;
+  }
+
+  whatIfModifiedResults = res.data;
+  renderWhatIfComparison(whatIfBaselineResults, whatIfModifiedResults);
+  toast('What-If comparison ready', 'success');
+}
+
+function renderWhatIfComparison(baseline, modified) {
+  const el = document.getElementById('whatif-comparison');
+  if (!el) return;
+
+  const bs = baseline.results_summary || {};
+  const ms = modified.results_summary || {};
+
+  // Compute deltas
+  const metrics = [
+    { label: 'Attacks Blocked', bv: bs.blocked_actions || 0, mv: ms.blocked_actions || 0, higher_is_better: true },
+    { label: 'Hosts Compromised', bv: (baseline.campaigns||[]).reduce((n,c) => n + (c.hosts_compromised||[]).length, 0),
+      mv: (modified.campaigns||[]).reduce((n,c) => n + (c.hosts_compromised||[]).length, 0), higher_is_better: false },
+    { label: 'Success Rate', bv: bs.success_rate || 0, mv: ms.success_rate || 0, higher_is_better: false, pct: true },
+    { label: 'Detection Rate', bv: bs.detection_rate || 0, mv: ms.detection_rate || 0, higher_is_better: true, pct: true },
+  ];
+
+  let html = '<div class="whatif-deltas">';
+  metrics.forEach(m => {
+    const bStr = m.pct ? (m.bv * 100).toFixed(0) + '%' : m.bv;
+    const mStr = m.pct ? (m.mv * 100).toFixed(0) + '%' : m.mv;
+    const diff = m.mv - m.bv;
+    const improved = m.higher_is_better ? diff > 0 : diff < 0;
+    const worsened = m.higher_is_better ? diff < 0 : diff > 0;
+    const cls = diff === 0 ? 'neutral' : (improved ? 'improved' : 'worsened');
+    const sign = diff > 0 ? '+' : '';
+    const diffStr = m.pct ? `${sign}${(diff * 100).toFixed(0)}%` : `${sign}${diff}`;
+
+    html += `<div class="whatif-delta-card">
+      <div class="whatif-delta-label">${escHtml(m.label)}</div>
+      <div class="whatif-delta-values">
+        <span style="color:var(--text-muted)">${bStr}</span>
+        <span class="whatif-delta-arrow">&rarr;</span>
+        <span style="color:var(--text-primary)">${mStr}</span>
+      </div>
+      <div class="whatif-delta-pct ${cls}">${diffStr}</div>
+    </div>`;
+  });
+  html += '</div>';
+
+  // Per-archetype comparison
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:12px;">';
+  (baseline.campaigns || []).forEach(bc => {
+    const mc = (modified.campaigns || []).find(c => c.archetype === bc.archetype) || {};
+    const color = AGENT_COLORS[bc.archetype] || '#888';
+    const bComp = (bc.hosts_compromised || []).length;
+    const mComp = (mc.hosts_compromised || []).length;
+
+    let verdict, verdictCls;
+    if (bComp > 0 && mComp === 0) { verdict = 'STOPPED'; verdictCls = 'stopped'; }
+    else if (mComp < bComp) { verdict = 'HINDERED'; verdictCls = 'hindered'; }
+    else { verdict = 'NO CHANGE'; verdictCls = 'nochange'; }
+
+    html += `<div style="background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid ${color};border-radius:var(--radius-sm);padding:10px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-primary);text-transform:uppercase;margin-bottom:6px;">${escHtml(bc.archetype)}</div>
+      <div style="font-size:11px;color:var(--text-secondary);">Compromised: ${bComp} &rarr; ${mComp}</div>
+      <div style="font-size:11px;color:var(--text-secondary);">Succeeded: ${bc.successful_actions||0} &rarr; ${mc.successful_actions||0}</div>
+      <div style="margin-top:6px;"><span class="whatif-verdict ${verdictCls}">${verdict}</span></div>
+    </div>`;
+  });
+  html += '</div>';
+
+  // Business insight
+  const totalBaseComp = (baseline.campaigns||[]).reduce((n,c) => n + (c.hosts_compromised||[]).length, 0);
+  const totalModComp = (modified.campaigns||[]).reduce((n,c) => n + (c.hosts_compromised||[]).length, 0);
+  const blockedDiff = (ms.blocked_actions || 0) - (bs.blocked_actions || 0);
+
+  let insight = '';
+  if (totalModComp < totalBaseComp) {
+    const pct = Math.round((1 - totalModComp / Math.max(totalBaseComp, 1)) * 100);
+    insight = `Your defense changes reduced compromised hosts from ${totalBaseComp} to ${totalModComp} (${pct}% improvement). `;
+  }
+  if (blockedDiff > 0) {
+    insight += `${blockedDiff} additional attack${blockedDiff > 1 ? 's were' : ' was'} blocked by the new configuration. `;
+  }
+  if (!insight) {
+    insight = 'The defense changes did not significantly alter the simulation outcome. Consider enabling stronger controls like MFA and EDR on critical hosts.';
+  }
+
+  // Defender effectiveness comparison (if both have defender_summary)
+  const bds = baseline.defender_summary;
+  const mds = modified.defender_summary;
+  if (bds && mds) {
+    const defMetrics = [
+      { label: 'Attacks Prevented', bv: bds.attacks_prevented || 0, mv: mds.attacks_prevented || 0, higher_is_better: true },
+      { label: 'Hosts Isolated', bv: (bds.hosts_isolated || []).length, mv: (mds.hosts_isolated || []).length, higher_is_better: true },
+      { label: 'IPs Blocked', bv: (bds.ips_blocked || []).length, mv: (mds.ips_blocked || []).length, higher_is_better: true },
+      { label: 'EDR Deployed', bv: (bds.edr_deployed || []).length, mv: (mds.edr_deployed || []).length, higher_is_better: true },
+    ];
+
+    html += `<div style="margin-top:12px;padding-top:12px;border-top:2px solid rgba(88,166,255,0.3);">
+      <div style="font-size:12px;font-weight:700;color:#58a6ff;margin-bottom:8px;letter-spacing:1px;">DEFENDER EFFECTIVENESS</div>
+      <div class="whatif-deltas">`;
+    defMetrics.forEach(m => {
+      const diff = m.mv - m.bv;
+      const improved = m.higher_is_better ? diff > 0 : diff < 0;
+      const cls = diff === 0 ? 'neutral' : (improved ? 'improved' : 'worsened');
+      const sign = diff > 0 ? '+' : '';
+      html += `<div class="whatif-delta-card">
+        <div class="whatif-delta-label">${escHtml(m.label)}</div>
+        <div class="whatif-delta-values">
+          <span style="color:var(--text-muted)">${m.bv}</span>
+          <span class="whatif-delta-arrow">&rarr;</span>
+          <span style="color:var(--text-primary)">${m.mv}</span>
+        </div>
+        <div class="whatif-delta-pct ${cls}">${sign}${diff}</div>
+      </div>`;
+    });
+    html += '</div></div>';
+  }
+
+  html += `<div class="whatif-insight">${escHtml(insight)}</div>`;
+
+  el.innerHTML = html;
+  el.classList.add('visible');
+}
+
+function resetWhatIf() {
+  if (!whatIfBaselineEnv) return;
+  whatIfModifiedEnv = JSON.parse(JSON.stringify(whatIfBaselineEnv));
+  whatIfModifiedResults = null;
+
+  // Re-render editor
+  renderWhatIfEditor(whatIfBaselineResults, whatIfBaselineEnv);
+
+  const compEl = document.getElementById('whatif-comparison');
+  if (compEl) { compEl.innerHTML = ''; compEl.classList.remove('visible'); }
 }
 
 // ── INIT ─────────────────────────────────────────────────────

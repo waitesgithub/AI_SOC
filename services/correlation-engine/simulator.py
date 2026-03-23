@@ -30,6 +30,13 @@ from actions import (
     get_available_actions,
 )
 from archetypes import AttackerAgent
+from defender_archetypes import DefenderAgent
+from defender_actions import (
+    DefenderState,
+    DefenderActionOutcome,
+    execute_defender_action,
+    get_available_defender_actions,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +47,10 @@ class SimulationConfig:
     agent_archetypes: List[str] = field(
         default_factory=lambda: ["opportunist", "apt", "ransomware", "insider"]
     )
+    defender_archetypes: List[str] = field(
+        default_factory=lambda: ["soc_analyst", "incident_responder", "threat_hunter"]
+    )
+    defenders_enabled: bool = True
     timesteps: int = 3
     concurrency: int = 3
     ollama_host: str = "http://ollama:11434"
@@ -58,6 +69,21 @@ class TraceRecord:
     detected: bool
     kill_chain_stage: str
     mitre_technique: str
+    reasoning: str
+    detail: str
+
+
+@dataclass
+class DefenderTraceRecord:
+    """A single defensive action taken during simulation."""
+    timestep: int
+    agent_id: str
+    archetype: str
+    action_id: str
+    target_ip: str
+    result: str
+    environment_modified: bool
+    defense_stage: str
     reasoning: str
     detail: str
 
@@ -106,7 +132,7 @@ class CampaignSimulator:
             f"{self.config.timesteps} timesteps"
         )
 
-        # Create agents
+        # Create attacker agents
         agents: List[AttackerAgent] = []
         for i, archetype in enumerate(self.config.agent_archetypes):
             agent = AttackerAgent(
@@ -129,24 +155,68 @@ class CampaignSimulator:
 
             agents.append(agent)
 
+        # Create defender agents (Phase 2: Red vs Blue)
+        defenders: List[DefenderAgent] = []
+        if self.config.defenders_enabled:
+            for i, archetype in enumerate(self.config.defender_archetypes):
+                defender = DefenderAgent(
+                    agent_id=f"{archetype}-{i}",
+                    archetype=archetype,
+                    ollama_host=self.config.ollama_host,
+                    model=self.config.ollama_model,
+                )
+                defenders.append(defender)
+            logger.info(f"Simulation {sim_id}: {len(defenders)} defender agents active")
+
         # Run simulation timesteps
         all_traces: List[TraceRecord] = []
+        all_defender_traces: List[DefenderTraceRecord] = []
 
         for timestep in range(self.config.timesteps):
             logger.info(f"Simulation {sim_id}: timestep {timestep + 1}/{self.config.timesteps}")
 
-            # Process all agents in parallel (bounded by semaphore)
-            tasks = [
+            # Phase 1: Attackers act
+            attacker_tasks = [
                 self._step_agent(agent, environment, timestep)
                 for agent in agents
             ]
-            timestep_traces = await asyncio.gather(*tasks, return_exceptions=True)
+            timestep_traces = await asyncio.gather(*attacker_tasks, return_exceptions=True)
 
+            timestep_attacker_traces = []
             for result in timestep_traces:
                 if isinstance(result, TraceRecord):
                     all_traces.append(result)
+                    timestep_attacker_traces.append(result)
                 elif isinstance(result, Exception):
                     logger.error(f"Agent step failed: {result}")
+
+            # Phase 2: Defenders react (only see detected actions)
+            if defenders:
+                alerts = self._generate_alerts(timestep_attacker_traces, environment)
+                escalation_queue: List[Dict] = []
+
+                defender_tasks = [
+                    self._step_defender(
+                        defender, environment, timestep, alerts, escalation_queue
+                    )
+                    for defender in defenders
+                ]
+                defender_results = await asyncio.gather(
+                    *defender_tasks, return_exceptions=True
+                )
+
+                for result in defender_results:
+                    if isinstance(result, DefenderTraceRecord):
+                        all_defender_traces.append(result)
+                        # Handle escalations for next timestep
+                        if result.action_id == "escalate":
+                            escalation_queue.append({
+                                "from": result.agent_id,
+                                "target_ip": result.target_ip,
+                                "detail": result.reasoning,
+                            })
+                    elif isinstance(result, Exception):
+                        logger.error(f"Defender step failed: {result}")
 
         elapsed_ms = int((time.time() - start_time) * 1000)
 
@@ -157,14 +227,16 @@ class CampaignSimulator:
             agents=agents,
             environment=environment,
             elapsed_ms=elapsed_ms,
+            defender_traces=all_defender_traces,
+            defenders=defenders,
         )
 
         # Reset environment for next simulation
         environment.reset()
 
         logger.info(
-            f"Simulation {sim_id} complete: {len(all_traces)} actions, "
-            f"{elapsed_ms}ms"
+            f"Simulation {sim_id} complete: {len(all_traces)} attacker actions, "
+            f"{len(all_defender_traces)} defender actions, {elapsed_ms}ms"
         )
 
         return report
@@ -234,6 +306,110 @@ class CampaignSimulator:
                 logger.error(f"Agent {agent.agent_id} step failed: {e}")
                 return None
 
+    async def _step_defender(
+        self,
+        defender: DefenderAgent,
+        env: Environment,
+        timestep: int,
+        alerts: List[Dict],
+        escalation_queue: List[Dict],
+    ) -> Optional[DefenderTraceRecord]:
+        """Execute one defensive timestep for a single defender agent."""
+        async with self._semaphore:
+            try:
+                observation = env.to_defender_observation(alerts, defender.state)
+                available = get_available_defender_actions(env, defender.state)
+
+                if not available:
+                    available = ["do_nothing"]
+
+                # Filter escalations (don't show agent its own)
+                other_escalations = [
+                    e for e in escalation_queue
+                    if e.get("from") != defender.agent_id
+                ]
+
+                action_id, target_ip, reasoning = await defender.decide(
+                    observation, available, alerts, other_escalations
+                )
+
+                # Validate target
+                if not target_ip or not env.get_host(target_ip):
+                    all_ips = [h.ip for h in env.get_all_hosts()]
+                    target_ip = all_ips[0] if all_ips else "unknown"
+
+                outcome = execute_defender_action(
+                    action_id, env, target_ip, defender.state
+                )
+                defender.update_memory(action_id, target_ip, outcome)
+
+                trace = DefenderTraceRecord(
+                    timestep=timestep,
+                    agent_id=defender.agent_id,
+                    archetype=defender.archetype,
+                    action_id=action_id,
+                    target_ip=target_ip,
+                    result=outcome.result.value,
+                    environment_modified=outcome.environment_modified,
+                    defense_stage=outcome.defense_stage,
+                    reasoning=reasoning,
+                    detail=outcome.detail,
+                )
+
+                logger.debug(
+                    f"  {defender.agent_id}: {action_id} on {target_ip} -> "
+                    f"{outcome.result.value} (env_modified={outcome.environment_modified})"
+                )
+
+                return trace
+
+            except Exception as e:
+                logger.error(f"Defender {defender.agent_id} step failed: {e}")
+                return None
+
+    def _generate_alerts(
+        self, traces: List[TraceRecord], environment: Environment
+    ) -> List[Dict]:
+        """Convert attacker traces to defender-visible alerts.
+
+        Only detected actions on hosts with detection capability become
+        visible alerts. Undetected actions are invisible to defenders.
+        """
+        alerts = []
+        for trace in traces:
+            if not trace.detected:
+                continue
+            host = environment.get_host(trace.target_ip)
+            if not host:
+                continue
+            if not (host.defenses.wazuh_agent or host.defenses.edr_present):
+                continue
+
+            severity = "medium"
+            if trace.kill_chain_stage in (
+                "exfiltration", "impact", "command_and_control"
+            ):
+                severity = "critical"
+            elif trace.kill_chain_stage in (
+                "lateral_movement", "privilege_escalation", "persistence"
+            ):
+                severity = "high"
+            elif trace.kill_chain_stage in ("initial_access", "execution"):
+                severity = "medium"
+            else:
+                severity = "low"
+
+            alerts.append({
+                "target_ip": trace.target_ip,
+                "action_type": trace.action_id,
+                "severity": severity,
+                "kill_chain_stage": trace.kill_chain_stage,
+                "mitre_technique": trace.mitre_technique,
+                "detail": trace.detail,
+                "timestep": trace.timestep,
+            })
+        return alerts
+
     def _generate_report(
         self,
         sim_id: str,
@@ -241,6 +417,8 @@ class CampaignSimulator:
         agents: List[AttackerAgent],
         environment: Environment,
         elapsed_ms: int,
+        defender_traces: Optional[List[DefenderTraceRecord]] = None,
+        defenders: Optional[List[DefenderAgent]] = None,
     ) -> Dict:
         """Analyze simulation traces and produce a campaign report."""
 
@@ -378,6 +556,7 @@ class CampaignSimulator:
                 "timesteps": self.config.timesteps,
                 "model": self.config.ollama_model,
             },
+            "environment": environment.snapshot(),
             "environment_summary": {
                 "name": environment.name,
                 "total_hosts": len(environment.hosts),
@@ -405,4 +584,75 @@ class CampaignSimulator:
             "defense_validation": dict(defenses_tested),
             "weakest_points": weakest_points,
             "recommended_actions": recommended_actions,
+            **self._build_defender_report(
+                defender_traces or [], defenders or [], traces
+            ),
+        }
+
+    def _build_defender_report(
+        self,
+        defender_traces: List[DefenderTraceRecord],
+        defenders: List[DefenderAgent],
+        attacker_traces: List[TraceRecord],
+    ) -> Dict:
+        """Build the defender portion of the simulation report."""
+        if not defenders:
+            return {}
+
+        # Count attacker actions blocked specifically by defender interventions
+        defender_blocked = sum(
+            1 for t in attacker_traces if t.result == "blocked"
+            and ("blocked by defenders" in t.detail or "isolated" in t.detail
+                 or "revoked" in t.detail)
+        )
+
+        # Per-defender campaigns
+        defender_campaigns = []
+        for defender in defenders:
+            agent_traces = [
+                t for t in defender_traces if t.agent_id == defender.agent_id
+            ]
+            defender_campaigns.append({
+                "agent_id": defender.agent_id,
+                "archetype": defender.archetype,
+                "actions_taken": len(agent_traces),
+                "successful_blocks": defender.state.successful_blocks,
+                "investigations_completed": len(defender.state.investigated_hosts),
+                "escalations_sent": len(defender.state.escalations_sent),
+                "defense_path": [
+                    {
+                        "timestep": t.timestep,
+                        "action": t.action_id,
+                        "target": t.target_ip,
+                        "result": t.result,
+                        "reasoning": t.reasoning[:200],
+                        "environment_modified": t.environment_modified,
+                        "defense_stage": t.defense_stage,
+                    }
+                    for t in agent_traces
+                ],
+            })
+
+        # Aggregate defender summary
+        all_isolated = set()
+        all_blocked = set()
+        all_edr = set()
+        creds_revoked = False
+        for d in defenders:
+            all_isolated.update(d.state.isolated_hosts)
+            all_blocked.update(d.state.blocked_ips)
+            all_edr.update(d.state.edr_deployed)
+            if d.state.credentials_revoked:
+                creds_revoked = True
+
+        return {
+            "defender_campaigns": defender_campaigns,
+            "defender_summary": {
+                "total_defender_actions": len(defender_traces),
+                "hosts_isolated": list(all_isolated),
+                "ips_blocked": list(all_blocked),
+                "edr_deployed": list(all_edr),
+                "credentials_revoked": creds_revoked,
+                "attacks_prevented": defender_blocked,
+            },
         }

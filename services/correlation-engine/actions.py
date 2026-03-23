@@ -1402,6 +1402,54 @@ def execute_action(
     registry = _get_registry()
     action = registry.get(action_id)
 
+    # --- Defender state checks (Phase 2: Red vs Blue) ---
+    # Blocked IPs: defenders can block IPs at firewall
+    if hasattr(env, 'blocked_ips') and target_ip in env.blocked_ips:
+        return ActionOutcome(
+            action_id=action_id,
+            result=ActionResult.BLOCKED,
+            target_ip=target_ip,
+            detail=f"IP {target_ip} has been blocked by defenders",
+            detected=True,
+            kill_chain_stage=action.get("kill_chain_stage", "reconnaissance") if action else "reconnaissance",
+            mitre_technique_id=action.get("mitre_technique", "N/A") if action else "N/A",
+        )
+
+    # Isolated hosts: defenders can isolate hosts from network
+    if hasattr(env, 'isolated_hosts') and target_ip in env.isolated_hosts:
+        return ActionOutcome(
+            action_id=action_id,
+            result=ActionResult.BLOCKED,
+            target_ip=target_ip,
+            detail=f"Host {target_ip} has been isolated from network by defenders",
+            detected=True,
+            kill_chain_stage=action.get("kill_chain_stage", "reconnaissance") if action else "reconnaissance",
+            mitre_technique_id=action.get("mitre_technique", "N/A") if action else "N/A",
+        )
+
+    # Revoked credentials: pass_the_hash and credential_dump degraded
+    if hasattr(env, 'credentials_revoked') and env.credentials_revoked:
+        if action_id == "pass_the_hash":
+            return ActionOutcome(
+                action_id=action_id,
+                result=ActionResult.BLOCKED,
+                target_ip=target_ip,
+                detail="Pass-the-hash failed — credentials have been revoked by defenders",
+                detected=True,
+                kill_chain_stage="lateral_movement",
+                mitre_technique_id="T1550.002",
+            )
+        if action_id == "credential_dump":
+            return ActionOutcome(
+                action_id=action_id,
+                result=ActionResult.FAILURE,
+                target_ip=target_ip,
+                detail="Credential dump returned revoked credentials — unusable",
+                detected=True,
+                kill_chain_stage="credential_access",
+                mitre_technique_id="T1003",
+            )
+
     if action is None:
         logger.error(
             "unknown_action",

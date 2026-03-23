@@ -88,6 +88,7 @@ class Host:
     admin_access: bool = False
     persistence_installed: bool = False
     credentials_dumped: bool = False
+    isolated: bool = False  # Defender isolated this host from network
 
     def has_cves(self) -> bool:
         return any(svc.cves for svc in self.services)
@@ -177,6 +178,10 @@ class Environment:
         self.segments = segments
         self.name = name
         self._initial_state = None
+        # Defender-mutable state
+        self.blocked_ips: Set[str] = set()
+        self.isolated_hosts: Set[str] = set()
+        self.credentials_revoked: bool = False
 
     def save_initial_state(self):
         """Save initial state for reset."""
@@ -186,6 +191,7 @@ class Environment:
                 "admin_access": h.admin_access,
                 "persistence_installed": h.persistence_installed,
                 "credentials_dumped": h.credentials_dumped,
+                "isolated": h.isolated,
             }
             for ip, h in self.hosts.items()
         }
@@ -200,6 +206,10 @@ class Environment:
                     host.admin_access = state["admin_access"]
                     host.persistence_installed = state["persistence_installed"]
                     host.credentials_dumped = state["credentials_dumped"]
+                    host.isolated = state.get("isolated", False)
+        self.blocked_ips = set()
+        self.isolated_hosts = set()
+        self.credentials_revoked = False
 
     def get_host(self, ip: str) -> Optional[Host]:
         return self.hosts.get(ip)
@@ -240,6 +250,13 @@ class Environment:
         # Remove self
         reachable_ips.discard(from_ip)
 
+        # Remove isolated hosts (defender action)
+        reachable_ips -= self.isolated_hosts
+
+        # If source is isolated, it can't reach anything
+        if from_ip in self.isolated_hosts:
+            return []
+
         return [self.hosts[ip] for ip in reachable_ips if ip in self.hosts]
 
     def snapshot(self) -> dict:
@@ -254,6 +271,9 @@ class Environment:
             "compromised_hosts": [
                 ip for ip, h in self.hosts.items() if h.compromised
             ],
+            "isolated_hosts": list(self.isolated_hosts),
+            "blocked_ips": list(self.blocked_ips),
+            "credentials_revoked": self.credentials_revoked,
         }
 
     def to_observation(self, discovered_ips: Set[str]) -> dict:
@@ -276,6 +296,48 @@ class Environment:
                 obs["externally_exposed"].append(
                     {"ip": host.ip, "hostname": host.hostname}
                 )
+
+        return obs
+
+    def to_defender_observation(self, alerts: List[dict], defender_state) -> dict:
+        """Build observation for a defender agent.
+
+        Defenders see alerts from detection systems, host status for monitored
+        hosts, and their own prior actions. They do NOT see undetected compromise
+        or attacker identities.
+        """
+        obs = {
+            "alerts": alerts,
+            "monitored_hosts": [],
+            "isolated_hosts": list(self.isolated_hosts),
+            "blocked_ips": list(self.blocked_ips),
+            "credentials_revoked": self.credentials_revoked,
+            "prior_actions": {
+                "investigated": list(defender_state.investigated_hosts),
+                "blocked": list(defender_state.blocked_ips),
+                "isolated": list(defender_state.isolated_hosts),
+                "edr_deployed": list(defender_state.edr_deployed),
+            },
+        }
+
+        # Defenders can only see host status for hosts with detection capability
+        for ip, host in self.hosts.items():
+            if host.defenses.wazuh_agent or host.defenses.edr_present:
+                host_info = {
+                    "ip": ip,
+                    "hostname": host.hostname,
+                    "os": host.os_type,
+                    "criticality": host.criticality,
+                    "edr_present": host.defenses.edr_present,
+                    "wazuh_agent": host.defenses.wazuh_agent,
+                    "isolated": host.isolated,
+                }
+                # Investigation reveals compromise state
+                if ip in defender_state.investigated_hosts:
+                    host_info["compromised"] = host.compromised
+                    host_info["admin_access"] = host.admin_access
+                    host_info["persistence_installed"] = host.persistence_installed
+                obs["monitored_hosts"].append(host_info)
 
         return obs
 

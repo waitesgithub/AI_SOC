@@ -356,6 +356,22 @@ def simulate_env_from_wazuh():
     return _proxy("http://localhost:8600/simulate/environment/from-wazuh", method="POST", timeout=TIMEOUT_LONG)
 
 
+@app.route("/api/simulate/<simulation_id>/chat", methods=["POST"])
+def simulate_chat(simulation_id):
+    return _proxy(f"http://localhost:8600/simulate/{simulation_id}/chat", method="POST", timeout=TIMEOUT_LONG)
+
+
+@app.route("/api/environment/default")
+def get_default_environment():
+    import os
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config', 'simulation', 'default-environment.json')
+    try:
+        with open(env_path) as f:
+            return jsonify(json.load(f))
+    except FileNotFoundError:
+        return jsonify({"error": f"Default environment not found at {env_path}"}), 404
+
+
 @app.route("/api/risk-scores")
 def risk_scores():
     return _proxy("http://localhost:8600/risk-scores", timeout=TIMEOUT_STD)

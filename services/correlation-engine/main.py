@@ -45,6 +45,11 @@ from environment import Environment
 from dataset_generator import DatasetGenerator
 from wazuh_environment import WazuhEnvironmentBuilder
 from risk_scorer import RiskScorer
+from collections import OrderedDict
+import httpx
+from pydantic import BaseModel
+from archetypes import ARCHETYPE_PROMPTS
+from defender_archetypes import DEFENDER_ARCHETYPE_PROMPTS
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -114,6 +119,10 @@ async def lifespan(app: FastAPI):
     # Initialize risk scorer
     app.state.risk_scorer = RiskScorer()
     logger.info("Risk scorer initialized")
+
+    # Initialize simulation store for chat feature
+    app.state.simulation_store = OrderedDict()
+    logger.info("Simulation store initialized")
 
     yield
 
@@ -491,10 +500,262 @@ async def run_simulation(
 
     try:
         report = await simulator.run(env)
+
+        # Store for chat feature (LRU, max 20)
+        store = getattr(app.state, "simulation_store", None)
+        if store is not None:
+            sim_id = report.get("simulation_id", "unknown")
+            store[sim_id] = {"report": report, "chat_sessions": {}}
+            while len(store) > 20:
+                store.popitem(last=False)
+
         return report
     except Exception as e:
         logger.error(f"Simulation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Simulation failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Chat with Attacker Agent
+# ---------------------------------------------------------------------------
+
+
+class ChatMessage(BaseModel):
+    agent_id: str
+    message: str
+
+
+@app.post("/simulate/{simulation_id}/chat")
+async def chat_with_attacker(simulation_id: str, body: ChatMessage):
+    """
+    Chat with an attacker agent from a completed simulation.
+
+    The agent stays in character, references its actual attack path,
+    and can explain strategy, reasoning, and what defenses would stop it.
+    """
+    store = getattr(app.state, "simulation_store", None)
+    if not store or simulation_id not in store:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Simulation '{simulation_id}' not found. Run a simulation first.",
+        )
+
+    sim_data = store[simulation_id]
+    report = sim_data["report"]
+
+    # Find agent campaign (check both attackers and defenders)
+    campaign = None
+    is_defender = False
+    for c in report.get("campaigns", []):
+        if c["agent_id"] == body.agent_id:
+            campaign = c
+            break
+    if not campaign:
+        for c in report.get("defender_campaigns", []):
+            if c["agent_id"] == body.agent_id:
+                campaign = c
+                is_defender = True
+                break
+
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Agent '{body.agent_id}' not found in simulation '{simulation_id}'",
+        )
+
+    archetype = campaign["archetype"]
+
+    # Get or create chat session
+    chat_sessions = sim_data.setdefault("chat_sessions", {})
+    if body.agent_id not in chat_sessions:
+        chat_sessions[body.agent_id] = []
+
+    # Build system prompt (different for attackers vs defenders)
+    if is_defender:
+        system_prompt = _build_defender_chat_prompt(
+            archetype, campaign, report.get("environment", {}),
+            report.get("campaigns", []),
+        )
+    else:
+        system_prompt = _build_chat_system_prompt(
+            archetype, campaign, report.get("environment", {})
+        )
+
+    # Build message history
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(chat_sessions[body.agent_id])
+    messages.append({"role": "user", "content": body.message})
+
+    # Call Ollama /api/chat
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{settings.simulator_ollama_host}/api/chat",
+                json={
+                    "model": settings.simulator_ollama_model,
+                    "messages": messages,
+                    "stream": False,
+                    "options": {"temperature": 0.6},
+                },
+            )
+            if resp.status_code == 200:
+                result = resp.json()
+                assistant_msg = result.get("message", {}).get(
+                    "content", "I cannot respond right now."
+                )
+            else:
+                logger.error("Ollama chat error: status=%d", resp.status_code)
+                raise HTTPException(
+                    status_code=502, detail="LLM service returned an error"
+                )
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="LLM request timed out")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Chat failed: %s", e)
+        raise HTTPException(status_code=502, detail=f"Failed to reach LLM: {e}")
+
+    # Store conversation
+    chat_sessions[body.agent_id].append({"role": "user", "content": body.message})
+    chat_sessions[body.agent_id].append(
+        {"role": "assistant", "content": assistant_msg}
+    )
+
+    return {
+        "response": assistant_msg,
+        "agent_id": body.agent_id,
+        "archetype": archetype,
+    }
+
+
+def _build_chat_system_prompt(
+    archetype: str, campaign: dict, environment: dict
+) -> str:
+    """Build the system prompt for chatting with an attacker agent."""
+    personality = ARCHETYPE_PROMPTS.get(archetype, "You are an attacker agent.")
+
+    # Format attack path
+    path_lines = []
+    for step in campaign.get("attack_path", []):
+        ts = step.get("timestep", 0) + 1
+        line = (
+            f"  Turn {ts}: {step.get('action', '?')} on "
+            f"{step.get('target', '?')} -> {step.get('result', '?')}"
+        )
+        if step.get("reasoning"):
+            line += f"\n    Reasoning: {step['reasoning']}"
+        path_lines.append(line)
+    path_text = "\n".join(path_lines) if path_lines else "  No actions recorded"
+
+    # Format environment
+    env_lines = []
+    for ip, h in environment.get("hosts", {}).items():
+        hostname = h.get("hostname", ip)
+        os_type = h.get("os", "?")
+        crit = h.get("criticality", "?")
+        services = ", ".join(s.get("name", "?") for s in h.get("services", []))
+        defenses = h.get("defenses", {})
+        def_list = [k.replace("_", " ") for k, v in defenses.items() if v]
+        env_lines.append(
+            f"  {ip} ({hostname}) - {os_type} - criticality: {crit}"
+            f" - services: {services or 'none'}"
+            f" - defenses: {', '.join(def_list) or 'none'}"
+        )
+    env_text = "\n".join(env_lines) if env_lines else "  No environment data"
+
+    compromised = ", ".join(campaign.get("hosts_compromised", [])) or "None"
+    persistence = ", ".join(campaign.get("persistence_established", [])) or "None"
+
+    return (
+        f"You are roleplaying as an attacker agent from a completed "
+        f"cybersecurity simulation.\n\n"
+        f"YOUR PERSONALITY/ARCHETYPE:\n{personality}\n\n"
+        f"YOUR CAMPAIGN RESULTS:\n"
+        f"  Agent ID: {campaign.get('agent_id', '?')}\n"
+        f"  Archetype: {archetype}\n"
+        f"  Actions taken: {campaign.get('actions_taken', 0)}\n"
+        f"  Successful actions: {campaign.get('successful_actions', 0)}\n"
+        f"  Detected actions: {campaign.get('detected_actions', 0)}\n"
+        f"  Hosts compromised: {compromised}\n"
+        f"  Final kill chain stage: {campaign.get('final_kill_chain_stage', 'none')}\n"
+        f"  Data exfiltrated: {campaign.get('data_exfiltrated', False)}\n"
+        f"  Persistence established: {persistence}\n\n"
+        f"YOUR ATTACK PATH:\n{path_text}\n\n"
+        f"THE ENVIRONMENT YOU ATTACKED:\n{env_text}\n\n"
+        f"INSTRUCTIONS:\n"
+        f"- Stay in character as your archetype at all times\n"
+        f"- Reference your ACTUAL actions from the simulation — never invent "
+        f"actions you didn't take\n"
+        f"- When asked 'why' questions, explain your reasoning based on your "
+        f"archetype's goals\n"
+        f"- When asked about defenses, give specific recommendations based on "
+        f"what would have stopped your actual attack path\n"
+        f"- Be conversational but maintain your attacker persona\n"
+        f"- You can discuss strategy, your decision-making process, and what "
+        f"defenses concerned you\n"
+        f"- If asked about actions you didn't take, explain why your archetype "
+        f"chose differently"
+    )
+
+
+def _build_defender_chat_prompt(
+    archetype: str, campaign: dict, environment: dict,
+    attacker_campaigns: list,
+) -> str:
+    """Build the system prompt for chatting with a defender agent."""
+    personality = DEFENDER_ARCHETYPE_PROMPTS.get(
+        archetype, "You are a SOC defender agent."
+    )
+
+    # Format defense path
+    path_lines = []
+    for step in campaign.get("defense_path", []):
+        ts = step.get("timestep", 0) + 1
+        line = (
+            f"  Turn {ts}: {step.get('action', '?')} on "
+            f"{step.get('target', '?')} -> {step.get('result', '?')}"
+        )
+        if step.get("reasoning"):
+            line += f"\n    Reasoning: {step['reasoning']}"
+        path_lines.append(line)
+    path_text = "\n".join(path_lines) if path_lines else "  No actions recorded"
+
+    # Summarize attacker outcomes (what the defender was up against)
+    attacker_summary_lines = []
+    for ac in attacker_campaigns:
+        compromised = ", ".join(ac.get("hosts_compromised", [])) or "None"
+        attacker_summary_lines.append(
+            f"  {ac.get('agent_id', '?')} ({ac.get('archetype', '?')}): "
+            f"{ac.get('actions_taken', 0)} actions, "
+            f"compromised: {compromised}"
+        )
+    attacker_text = "\n".join(attacker_summary_lines) or "  No attacker data"
+
+    blocks = campaign.get("successful_blocks", 0)
+    investigations = campaign.get("investigations_completed", 0)
+
+    return (
+        f"You are roleplaying as a defender agent from a completed "
+        f"cybersecurity simulation.\n\n"
+        f"YOUR PERSONALITY/ARCHETYPE:\n{personality}\n\n"
+        f"YOUR DEFENSE RESULTS:\n"
+        f"  Agent ID: {campaign.get('agent_id', '?')}\n"
+        f"  Archetype: {archetype}\n"
+        f"  Actions taken: {campaign.get('actions_taken', 0)}\n"
+        f"  Successful blocks: {blocks}\n"
+        f"  Investigations: {investigations}\n"
+        f"  Escalations sent: {campaign.get('escalations_sent', 0)}\n\n"
+        f"YOUR DEFENSE PATH:\n{path_text}\n\n"
+        f"ATTACKER OUTCOMES (what you were defending against):\n{attacker_text}\n\n"
+        f"INSTRUCTIONS:\n"
+        f"- Stay in character as your defender archetype\n"
+        f"- Reference your ACTUAL defensive actions — never invent actions\n"
+        f"- When asked 'why' questions, explain your triage/prioritization logic\n"
+        f"- Discuss what additional resources or tools would have helped\n"
+        f"- Be honest about what you missed and what you caught\n"
+        f"- You can recommend improvements to the security posture"
+    )
 
 
 @app.post("/simulate/generate-dataset")
