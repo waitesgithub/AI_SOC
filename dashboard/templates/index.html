@@ -1823,6 +1823,196 @@ code, .mono { font-family: var(--font-mono); }
   z-index: 4;
 }
 .wg-node-shield.visible { display: flex; }
+
+/* ============================================================
+   SWARM MODE
+   ============================================================ */
+.swarm-config {
+  display: none;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.swarm-config.visible { display: flex; flex-wrap: wrap; align-items: center; }
+.swarm-input {
+  width: 70px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+.swarm-input:focus { border-color: var(--accent); }
+.swarm-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Swarm Progress */
+.swarm-progress {
+  padding: 16px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+.swarm-progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+.swarm-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+/* Heatmap */
+.swarm-heatmap {
+  position: relative;
+  min-height: 320px;
+  background: var(--bg-primary);
+  background-image:
+    radial-gradient(circle at 50% 50%, rgba(248,81,73,0.03) 0%, transparent 70%),
+    linear-gradient(rgba(42,58,74,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(42,58,74,0.08) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.heatmap-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.heatmap-ring {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  border: 3px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  transition: all 0.5s;
+}
+.heatmap-ring.critical { width: 72px; height: 72px; }
+.heatmap-ring.high { width: 60px; height: 60px; }
+.heatmap-ring.medium { width: 50px; height: 50px; }
+.heatmap-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.heatmap-rate {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Bar Charts */
+.bar-chart { margin: 12px 0; }
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.bar-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 120px;
+  text-align: right;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-track {
+  flex: 1;
+  height: 20px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  font-family: var(--font-mono);
+  min-width: 30px;
+  transition: width 0.5s ease;
+}
+
+/* Confidence sparkline */
+.sparkline-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 30px;
+}
+.sparkline-bar {
+  width: 8px;
+  background: var(--accent);
+  border-radius: 1px;
+  transition: height 0.3s;
+  opacity: 0.6;
+}
+.sparkline-bar:last-child { opacity: 1; }
+
+/* Swarm Stats Grid */
+.swarm-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.swarm-stat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+}
+.swarm-stat-value {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.swarm-stat-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+.swarm-stat-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
 </style>
 </head>
 <body>
@@ -1970,6 +2160,19 @@ code, .mono { font-family: var(--font-mono); }
               <span>Use live Wazuh infrastructure</span>
             </label>
             <span id="sim-env-badge" style="font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(88,166,255,0.15);color:var(--accent);display:none;"></span>
+          </div>
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-secondary);">
+              <input type="checkbox" id="sim-swarm-mode" style="accent-color:var(--critical);cursor:pointer;" onchange="toggleSwarmConfig()">
+              <span style="color:var(--critical);font-weight:600;">Swarm Mode</span>
+            </label>
+            <span style="font-size:10px;color:var(--text-muted);">(100s-1000s of agents)</span>
+          </div>
+          <div class="swarm-config" id="swarm-config">
+            <input class="swarm-input" type="number" id="swarm-size" value="50" min="10" max="500">
+            <span class="swarm-label">followers/archetype</span>
+            <input class="swarm-input" type="number" id="mc-runs" value="5" min="1" max="50">
+            <span class="swarm-label">Monte Carlo batches</span>
           </div>
           <div id="sim-status-row" class="hidden">
             <div class="sim-status">
@@ -2744,6 +2947,7 @@ function renderWazuhTopology(envData) {
 }
 
 async function runSimulation() {
+  if (document.getElementById('sim-swarm-mode')?.checked) { runSwarmSimulation(); return; }
   const btn = document.getElementById('btn-sim');
   const timesteps = parseInt(document.getElementById('sim-timesteps').value) || 3;
   const statusRow = document.getElementById('sim-status-row');
@@ -4361,6 +4565,363 @@ function resetWhatIf() {
 
   const compEl = document.getElementById('whatif-comparison');
   if (compEl) { compEl.innerHTML = ''; compEl.classList.remove('visible'); }
+}
+
+// ── SWARM MODE ───────────────────────────────────────────────
+let swarmPollTimer = null;
+
+function toggleSwarmConfig() {
+  const on = document.getElementById('sim-swarm-mode').checked;
+  const cfg = document.getElementById('swarm-config');
+  if (on) cfg.classList.add('visible');
+  else cfg.classList.remove('visible');
+}
+
+async function runSwarmSimulation() {
+  const btn = document.getElementById('btn-sim');
+  const statusRow = document.getElementById('sim-status-row');
+  const resultsEl = document.getElementById('sim-results');
+  const timesteps = parseInt(document.getElementById('sim-timesteps').value) || 3;
+  const swarmSize = parseInt(document.getElementById('swarm-size')?.value) || 50;
+  const mcRuns = parseInt(document.getElementById('mc-runs')?.value) || 5;
+  const useWazuh = document.getElementById('sim-use-wazuh')?.checked;
+
+  btn.classList.add('running');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner"></div> Swarm Running...';
+  statusRow.classList.remove('hidden');
+
+  // Fetch wazuh env if needed
+  let environmentJson = null;
+  if (useWazuh) {
+    const wazuhRes = await apiFetch('/api/simulate/environment/from-wazuh', { method: 'POST' });
+    if (wazuhRes.ok && wazuhRes.data?.environment) environmentJson = wazuhRes.data.environment;
+  }
+
+  // Build request body
+  const body = {};
+  if (environmentJson) body.environment_json = environmentJson;
+
+  const params = new URLSearchParams({
+    swarm_size: swarmSize,
+    monte_carlo_runs: mcRuns,
+    timesteps: timesteps,
+    defenders_enabled: true,
+  });
+
+  // Start swarm
+  const startRes = await apiFetch(`/api/simulate/swarm/start?${params}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!startRes.ok) {
+    btn.classList.remove('running');
+    btn.disabled = false;
+    btn.innerHTML = 'Run Simulation';
+    statusRow.classList.add('hidden');
+    resultsEl.innerHTML = `<div style="padding:16px;color:var(--critical);">Swarm failed to start: ${startRes.data?.error || 'Unknown error'}</div>`;
+    return;
+  }
+
+  const swarmId = startRes.data.swarm_id;
+
+  // Show progress UI
+  resultsEl.innerHTML = `
+    <div class="swarm-progress" id="swarm-progress">
+      <div style="font-size:14px;font-weight:600;color:var(--critical);margin-bottom:8px;letter-spacing:1px;">SWARM SIMULATION</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">
+        ${swarmSize} followers/archetype &times; ${mcRuns} Monte Carlo batches &times; ${timesteps} timesteps
+      </div>
+      <div class="swarm-progress-bar"><div class="swarm-progress-fill" id="swarm-progress-fill" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);">
+        <span id="swarm-progress-text">Starting...</span>
+        <span id="swarm-progress-time">0s</span>
+      </div>
+    </div>`;
+
+  // Poll for progress
+  swarmPollTimer = setInterval(async () => {
+    const statusRes = await apiFetch(`/api/simulate/swarm/${swarmId}/status`);
+    if (!statusRes.ok) return;
+
+    const s = statusRes.data;
+    if (s.status === 'complete') {
+      clearInterval(swarmPollTimer);
+      swarmPollTimer = null;
+      // Fetch result
+      const resultRes = await apiFetch(`/api/simulate/swarm/${swarmId}/result`);
+      btn.classList.remove('running');
+      btn.disabled = false;
+      btn.innerHTML = 'Run Simulation';
+      statusRow.classList.add('hidden');
+
+      if (resultRes.ok) {
+        renderSwarmResults(resultRes.data);
+        toast('Swarm simulation complete — statistical results below', 'success');
+      } else {
+        resultsEl.innerHTML = '<div style="padding:16px;color:var(--critical);">Failed to fetch swarm results</div>';
+      }
+      return;
+    }
+
+    if (s.status === 'failed') {
+      clearInterval(swarmPollTimer);
+      swarmPollTimer = null;
+      btn.classList.remove('running');
+      btn.disabled = false;
+      btn.innerHTML = 'Run Simulation';
+      statusRow.classList.add('hidden');
+      resultsEl.innerHTML = `<div style="padding:16px;color:var(--critical);">Swarm failed: ${s.error || 'Unknown'}</div>`;
+      return;
+    }
+
+    // Update progress
+    const pct = s.total_batches > 0 ? Math.round((s.current_batch / s.total_batches) * 100) : 0;
+    const fill = document.getElementById('swarm-progress-fill');
+    const text = document.getElementById('swarm-progress-text');
+    const timeEl = document.getElementById('swarm-progress-time');
+    if (fill) fill.style.width = pct + '%';
+    if (text) text.textContent = `Batch ${s.current_batch}/${s.total_batches} — ${s.total_agent_runs} agent runs`;
+    if (timeEl) timeEl.textContent = Math.round((s.elapsed_ms || 0) / 1000) + 's';
+  }, 5000);
+}
+
+function renderSwarmResults(report) {
+  const resultsEl = document.getElementById('sim-results');
+  const heatmap = report.host_risk_heatmap || {};
+  const archStats = report.archetype_statistics || {};
+  const pathFreq = report.path_frequency || {};
+  const defEff = report.defense_effectiveness || {};
+  const vulnRank = report.vulnerability_ranking || [];
+  const confidence = report.statistical_confidence || {};
+  const env = report.environment || {};
+
+  let html = '';
+
+  // Header stats
+  html += `<div style="padding:12px 0;border-bottom:1px solid var(--border);margin-bottom:16px;">
+    <div style="font-size:14px;font-weight:700;color:var(--critical);letter-spacing:1px;margin-bottom:4px;">SWARM INTELLIGENCE REPORT</div>
+    <div style="font-size:12px;color:var(--text-muted);">
+      ${report.total_agent_runs || 0} agent runs across ${report.total_simulations || 0} Monte Carlo batches — completed in ${((report.duration_ms || 0) / 1000).toFixed(0)}s
+    </div>
+  </div>`;
+
+  // Confidence dashboard
+  html += `<div class="swarm-stats-grid">
+    <div class="swarm-stat-card">
+      <div class="swarm-stat-value">${report.total_agent_runs || 0}</div>
+      <div class="swarm-stat-label">Agent Runs</div>
+    </div>
+    <div class="swarm-stat-card">
+      <div class="swarm-stat-value">${report.total_simulations || 0}</div>
+      <div class="swarm-stat-label">Monte Carlo Batches</div>
+    </div>
+    <div class="swarm-stat-card">
+      <div class="swarm-stat-value" style="color:${confidence.convergence_achieved ? 'var(--success)' : 'var(--high)'};">${confidence.convergence_achieved ? 'Yes' : 'No'}</div>
+      <div class="swarm-stat-label">Convergence</div>
+      ${confidence.convergence_batch > 0 ? `<div class="swarm-stat-sub">at batch ${confidence.convergence_batch}</div>` : ''}
+    </div>
+    <div class="swarm-stat-card">
+      <div class="sparkline-container" style="justify-content:center;">
+        ${(confidence.batch_success_rate_series || []).map(r => `<div class="sparkline-bar" style="height:${Math.max(5, r * 30)}px;"></div>`).join('')}
+      </div>
+      <div class="swarm-stat-label">Batch Convergence</div>
+    </div>
+  </div>`;
+
+  // Host Risk Heatmap
+  html += `<div style="margin-bottom:20px;">
+    <div class="section-title" style="margin-bottom:12px;">Host Compromise Heatmap</div>
+    <div class="swarm-heatmap" id="swarm-heatmap"></div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:10px;color:var(--text-muted);justify-content:center;">
+      <span><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#3fb950;vertical-align:middle;margin-right:4px;"></span>0% (Safe)</span>
+      <span><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#d29922;vertical-align:middle;margin-right:4px;"></span>50%</span>
+      <span><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#f85149;vertical-align:middle;margin-right:4px;"></span>100% (Critical)</span>
+    </div>
+  </div>`;
+
+  // Compromise Rate Bar Chart
+  const hostEntries = Object.entries(heatmap).sort((a, b) => b[1].compromise_rate - a[1].compromise_rate);
+  html += `<div style="margin-bottom:20px;">
+    <div class="section-title" style="margin-bottom:12px;">Compromise Rate by Host</div>
+    <div class="bar-chart">`;
+  hostEntries.forEach(([ip, stats]) => {
+    const pct = Math.round(stats.compromise_rate * 100);
+    const color = pct > 66 ? 'var(--critical)' : pct > 33 ? 'var(--high)' : 'var(--success)';
+    html += `<div class="bar-row">
+      <span class="bar-label">${escHtml(stats.hostname || ip)}</span>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${Math.max(pct, 3)}%;background:${color};">${pct}%</div>
+      </div>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  // Archetype Statistics
+  html += `<div style="margin-bottom:20px;">
+    <div class="section-title" style="margin-bottom:12px;">Archetype Performance</div>
+    <div class="swarm-stats-grid">`;
+  const archetypeColors = { opportunist: '#d29922', apt: '#f85149', ransomware: '#bc4dff', insider: '#ff6e40' };
+  Object.entries(archStats).forEach(([arch, stats]) => {
+    const color = archetypeColors[arch] || 'var(--text-muted)';
+    html += `<div class="swarm-stat-card" style="border-left:3px solid ${color};">
+      <div style="font-size:12px;font-weight:700;color:${color};text-transform:uppercase;margin-bottom:6px;">${escHtml(arch)}</div>
+      <div style="font-size:11px;color:var(--text-secondary);line-height:1.8;">
+        <div>Hosts compromised: <strong style="color:var(--text-primary);">${stats.hosts_compromised_mean?.toFixed(1) || 0}</strong> <span style="color:var(--text-muted);">(&plusmn;${stats.hosts_compromised_std?.toFixed(1) || 0})</span></div>
+        <div>Success rate: <strong style="color:var(--text-primary);">${((stats.success_rate_mean || 0) * 100).toFixed(0)}%</strong> <span style="color:var(--text-muted);">(&plusmn;${((stats.success_rate_std || 0) * 100).toFixed(0)}%)</span></div>
+        <div>Detection rate: <strong style="color:var(--text-primary);">${((stats.detection_rate_mean || 0) * 100).toFixed(0)}%</strong></div>
+        <div>Exfiltration: <strong style="color:var(--text-primary);">${((stats.data_exfiltration_rate || 0) * 100).toFixed(0)}%</strong></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">n=${stats.sample_size || 0}</div>
+      </div>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  // Attack Path Frequency
+  const topPaths = Object.entries(pathFreq).slice(0, 8);
+  if (topPaths.length) {
+    html += `<div style="margin-bottom:20px;">
+      <div class="section-title" style="margin-bottom:12px;">Top Attack Paths</div>
+      <div class="bar-chart">`;
+    topPaths.forEach(([path, stats]) => {
+      const pct = Math.round(stats.frequency * 100);
+      html += `<div class="bar-row">
+        <span class="bar-label" style="min-width:200px;font-size:10px;" title="${escHtml(path)}">${escHtml(path.length > 30 ? path.slice(0, 30) + '...' : path)}</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.max(pct, 3)}%;background:var(--accent);">${pct}%</div>
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // Defense Effectiveness
+  html += `<div style="margin-bottom:20px;">
+    <div class="section-title" style="margin-bottom:12px;">Defense Effectiveness</div>
+    <div class="bar-chart">`;
+  Object.entries(defEff).forEach(([defense, stats]) => {
+    const pct = Math.round(stats.block_rate * 100);
+    const ci = stats.confidence_interval_95 || [];
+    const color = pct > 66 ? 'var(--success)' : pct > 33 ? 'var(--high)' : 'var(--critical)';
+    html += `<div class="bar-row">
+      <span class="bar-label" style="text-transform:uppercase;">${escHtml(defense)}</span>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:${Math.max(pct, 3)}%;background:${color};">${pct}%</div>
+      </div>
+      <span style="font-size:10px;color:var(--text-muted);min-width:80px;">[${ci.map(v => Math.round(v*100)+'%').join('-')}]</span>
+    </div>`;
+  });
+  html += `</div></div>`;
+
+  // Vulnerability Priority Table
+  if (vulnRank.length) {
+    html += `<div style="margin-bottom:20px;">
+      <div class="section-title" style="margin-bottom:12px;">Vulnerability Priority Ranking</div>
+      <table class="risk-table">
+        <thead><tr><th>#</th><th>Vulnerability</th><th>Host</th><th>Exploit Rate</th><th>Impact</th><th>Priority Score</th></tr></thead>
+        <tbody>`;
+    vulnRank.forEach(v => {
+      const exploitPct = Math.round(v.exploit_rate * 100);
+      const color = exploitPct > 50 ? 'var(--critical)' : exploitPct > 25 ? 'var(--high)' : 'var(--text-secondary)';
+      html += `<tr>
+        <td style="color:var(--accent);font-weight:700;">${v.priority}</td>
+        <td class="mono" style="color:var(--critical);">${escHtml(v.vuln)}</td>
+        <td class="hostname">${escHtml(v.hostname)} <span style="color:var(--text-muted);font-size:10px;">(${escHtml(v.host)})</span></td>
+        <td><span style="color:${color};font-weight:700;">${exploitPct}%</span></td>
+        <td>${v.impact_score}/10</td>
+        <td style="font-weight:700;color:var(--text-primary);">${v.priority_score?.toFixed(1) || 0}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  resultsEl.innerHTML = html;
+
+  // Render heatmap with actual node positions
+  setTimeout(() => renderSwarmHeatmap(report), 100);
+}
+
+function renderSwarmHeatmap(report) {
+  const container = document.getElementById('swarm-heatmap');
+  if (!container) return;
+
+  const env = report.environment || {};
+  const heatmap = report.host_risk_heatmap || {};
+  const hosts = env.hosts || {};
+  const segments = env.segments || {};
+
+  // Compute layout
+  const w = container.offsetWidth;
+  const h = container.offsetHeight || 320;
+  const segNames = Object.keys(segments);
+  const segOrder = ['dmz', 'external', 'internal', 'corporate', 'critical', 'server'];
+  const orderedSegs = segNames.sort((a, b) => {
+    const ai = segOrder.indexOf(a.toLowerCase());
+    const bi = segOrder.indexOf(b.toLowerCase());
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  const yStep = h / (orderedSegs.length + 1);
+  const positions = {};
+  orderedSegs.forEach((segName, i) => {
+    const seg = segments[segName];
+    const hostIPs = seg.hosts || [];
+    const xStep = w / (hostIPs.length + 1);
+    hostIPs.forEach((ip, j) => {
+      positions[ip] = { x: xStep * (j + 1), y: yStep * (i + 1), segment: segName };
+    });
+  });
+
+  // Build nodes
+  let nodesHtml = '';
+  // Segment labels
+  const drawnSegs = new Set();
+  Object.entries(positions).forEach(([ip, pos]) => {
+    if (!drawnSegs.has(pos.segment)) {
+      drawnSegs.add(pos.segment);
+      nodesHtml += `<div style="position:absolute;left:12px;top:${pos.y - 35}px;font-family:var(--font-mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-muted);opacity:0.5;">${escHtml(pos.segment)}</div>`;
+    }
+  });
+
+  Object.entries(hosts).forEach(([ip, host]) => {
+    const pos = positions[ip];
+    if (!pos) return;
+    const stats = heatmap[ip] || {};
+    const rate = stats.compromise_rate || 0;
+    const pct = Math.round(rate * 100);
+
+    // Color interpolation: green (0%) -> yellow (50%) -> red (100%)
+    let color;
+    if (rate < 0.5) {
+      const t = rate / 0.5;
+      const r = Math.round(63 + (210 - 63) * t);
+      const g = Math.round(185 + (153 - 185) * t);
+      const b = Math.round(80 + (34 - 80) * t);
+      color = `rgb(${r},${g},${b})`;
+    } else {
+      const t = (rate - 0.5) / 0.5;
+      const r = Math.round(210 + (248 - 210) * t);
+      const g = Math.round(153 + (81 - 153) * t);
+      const b = Math.round(34 + (73 - 34) * t);
+      color = `rgb(${r},${g},${b})`;
+    }
+
+    const crit = host.criticality || 'medium';
+    const sizeClass = crit === 'critical' ? 'critical' : crit === 'high' ? 'high' : 'medium';
+    const glowIntensity = Math.round(rate * 0.6 * 100) / 100;
+
+    nodesHtml += `<div class="heatmap-node" style="left:${pos.x}px;top:${pos.y}px;">
+      <div class="heatmap-ring ${sizeClass}" style="border-color:${color};background:rgba(${rate > 0.5 ? '248,81,73' : '63,185,80'},0.1);box-shadow:0 0 ${10 + rate * 30}px rgba(${rate > 0.5 ? '248,81,73' : '63,185,80'},${glowIntensity});">
+        ${pct}%
+      </div>
+      <div class="heatmap-label">${escHtml(host.hostname || ip)}</div>
+      <div class="heatmap-rate">${escHtml(ip)}</div>
+    </div>`;
+  });
+
+  container.innerHTML = nodesHtml;
 }
 
 // ── INIT ─────────────────────────────────────────────────────

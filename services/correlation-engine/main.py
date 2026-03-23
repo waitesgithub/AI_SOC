@@ -50,6 +50,7 @@ import httpx
 from pydantic import BaseModel
 from archetypes import ARCHETYPE_PROMPTS
 from defender_archetypes import DEFENDER_ARCHETYPE_PROMPTS
+from swarm import SwarmSimulator, SwarmConfig
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -123,6 +124,11 @@ async def lifespan(app: FastAPI):
     # Initialize simulation store for chat feature
     app.state.simulation_store = OrderedDict()
     logger.info("Simulation store initialized")
+
+    # Initialize swarm store and task tracker
+    app.state.swarm_store = OrderedDict()
+    app.state.swarm_tasks = {}
+    logger.info("Swarm store initialized")
 
     yield
 
@@ -816,6 +822,149 @@ async def generate_dataset(
     except Exception as exc:
         logger.error("Dataset generation failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Dataset generation failed: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Swarm Simulation (Phase 3)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/simulate/swarm/start")
+async def start_swarm_simulation(
+    swarm_size: int = Query(50, ge=10, le=1000),
+    monte_carlo_runs: int = Query(10, ge=1, le=100),
+    timesteps: int = Query(3, ge=1, le=10),
+    defenders_enabled: bool = Query(True),
+    environment_json: Optional[Dict] = None,
+):
+    """
+    Start a swarm simulation in the background.
+
+    Returns a swarm_id immediately. Poll GET /simulate/swarm/{swarm_id}/status
+    for progress, then GET /simulate/swarm/{swarm_id}/result when complete.
+
+    Spawns N follower agents per archetype across M Monte Carlo batches.
+    Leaders use LLM decisions; followers replay with randomized parameters.
+    """
+    # Load environment
+    try:
+        if environment_json:
+            env = Environment.from_dict(environment_json)
+        elif settings.simulator_environment_config:
+            env = Environment.load_from_json(settings.simulator_environment_config)
+        else:
+            default_path = "/app/config/simulation/default-environment.json"
+            try:
+                env = Environment.load_from_json(default_path)
+            except FileNotFoundError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No environment config provided and default not found.",
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to load environment: {exc}")
+
+    config = SwarmConfig(
+        agent_archetypes=["opportunist", "apt", "ransomware", "insider"],
+        defenders_enabled=defenders_enabled,
+        timesteps=timesteps,
+        swarm_size=swarm_size,
+        monte_carlo_runs=monte_carlo_runs,
+        concurrency=settings.simulator_default_concurrency,
+        ollama_host=settings.simulator_ollama_host,
+        ollama_model=settings.simulator_ollama_model,
+    )
+
+    simulator = SwarmSimulator(config)
+
+    import asyncio as _asyncio
+
+    async def _run_swarm():
+        try:
+            report = await simulator.run(env)
+            # Store result
+            store = getattr(app.state, "swarm_store", None)
+            if store is not None:
+                store[report["swarm_id"]] = report
+                while len(store) > 5:
+                    store.popitem(last=False)
+            return report
+        except Exception as e:
+            logger.error(f"Swarm simulation failed: {e}", exc_info=True)
+            return {"error": str(e)}
+
+    # Launch as background task
+    task = _asyncio.create_task(_run_swarm())
+    swarm_id = f"SWARM-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
+    tasks = getattr(app.state, "swarm_tasks", {})
+    tasks[swarm_id] = {"task": task, "simulator": simulator}
+
+    return {
+        "swarm_id": swarm_id,
+        "status": "started",
+        "config": {
+            "swarm_size": swarm_size,
+            "monte_carlo_runs": monte_carlo_runs,
+            "timesteps": timesteps,
+            "defenders_enabled": defenders_enabled,
+        },
+    }
+
+
+@app.get("/simulate/swarm/{swarm_id}/status")
+async def swarm_status(swarm_id: str):
+    """Poll progress of a running swarm simulation."""
+    tasks = getattr(app.state, "swarm_tasks", {})
+    if swarm_id not in tasks:
+        raise HTTPException(status_code=404, detail=f"Swarm '{swarm_id}' not found")
+
+    entry = tasks[swarm_id]
+    task = entry["task"]
+    simulator = entry["simulator"]
+
+    if task.done():
+        result = task.result()
+        if isinstance(result, dict) and "error" in result:
+            return {"status": "failed", "error": result["error"]}
+        return {"status": "complete", "swarm_id": result.get("swarm_id", swarm_id)}
+
+    progress = simulator.progress
+    return {
+        "status": progress.get("status", "running"),
+        "current_batch": progress.get("current_batch", 0),
+        "total_batches": progress.get("total_batches", 0),
+        "total_agent_runs": progress.get("total_agent_runs", 0),
+        "elapsed_ms": progress.get("elapsed_ms", 0),
+    }
+
+
+@app.get("/simulate/swarm/{swarm_id}/result")
+async def swarm_result(swarm_id: str):
+    """Get the completed swarm simulation report."""
+    # Check store first
+    store = getattr(app.state, "swarm_store", {})
+    if swarm_id in store:
+        return store[swarm_id]
+
+    # Check if task completed with a different swarm_id
+    tasks = getattr(app.state, "swarm_tasks", {})
+    if swarm_id in tasks:
+        task = tasks[swarm_id]["task"]
+        if task.done():
+            result = task.result()
+            if isinstance(result, dict) and "error" not in result:
+                # Store by the actual swarm_id from the result
+                actual_id = result.get("swarm_id", swarm_id)
+                if actual_id in store:
+                    return store[actual_id]
+                return result
+            elif isinstance(result, dict):
+                raise HTTPException(status_code=500, detail=result.get("error", "Swarm failed"))
+        raise HTTPException(status_code=202, detail="Swarm simulation still running")
+
+    raise HTTPException(status_code=404, detail=f"Swarm '{swarm_id}' not found")
 
 
 @app.post("/simulate/environment/from-wazuh")

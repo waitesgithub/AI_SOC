@@ -356,6 +356,21 @@ def simulate_env_from_wazuh():
     return _proxy("http://localhost:8600/simulate/environment/from-wazuh", method="POST", timeout=TIMEOUT_LONG)
 
 
+@app.route("/api/simulate/swarm/start", methods=["POST"])
+def simulate_swarm_start():
+    return _proxy("http://localhost:8600/simulate/swarm/start", method="POST", timeout=30)
+
+
+@app.route("/api/simulate/swarm/<swarm_id>/status")
+def simulate_swarm_status(swarm_id):
+    return _proxy(f"http://localhost:8600/simulate/swarm/{swarm_id}/status", timeout=TIMEOUT_STD)
+
+
+@app.route("/api/simulate/swarm/<swarm_id>/result")
+def simulate_swarm_result(swarm_id):
+    return _proxy(f"http://localhost:8600/simulate/swarm/{swarm_id}/result", timeout=TIMEOUT_STD)
+
+
 @app.route("/api/simulate/<simulation_id>/chat", methods=["POST"])
 def simulate_chat(simulation_id):
     return _proxy(f"http://localhost:8600/simulate/{simulation_id}/chat", method="POST", timeout=TIMEOUT_LONG)
