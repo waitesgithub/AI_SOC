@@ -3,8 +3,12 @@ Attack Action Space - Attack Campaign Simulator
 AI-Augmented SOC
 
 20 attack actions mapped to MITRE ATT&CK techniques. Each action has
-prerequisites, a deterministic success evaluator, observability score,
+prerequisites, a probabilistic success evaluator, observability score,
 and state mutations. The LLM selects actions. The evaluator determines outcomes.
+
+Defense layers reduce success probability multiplicatively:
+  EDR, MFA, firewall, patching, and monitoring each contribute.
+  No defense is 100% effective. No attack is guaranteed.
 """
 
 import random
@@ -65,6 +69,51 @@ def _resolve_result(success: bool, detected: bool) -> ActionResult:
     if success:
         return ActionResult.SUCCESS
     return ActionResult.FAILURE
+
+
+def _defense_success_probability(host, action_type: str) -> float:
+    """Calculate probability of action success based on host defenses.
+
+    Each defense layer multiplies the base success rate down.
+    Multiple defenses compound — fully defended hosts are hard but not impossible.
+    This creates realistic variance for Monte Carlo exploration.
+
+    Returns a probability in [0.02, base_rate].
+    """
+    BASE_RATES = {
+        "exploit_public_service": 0.85,
+        "brute_force_creds": 0.70,
+        "pivot_to_host": 0.75,
+        "pass_the_hash": 0.80,
+        "exploit_local_vuln": 0.80,
+        "deploy_payload": 0.75,
+        "credential_dump": 0.70,
+    }
+
+    prob = BASE_RATES.get(action_type, 0.70)
+    defenses = host.defenses
+
+    if defenses.edr_present:
+        prob *= 0.50
+    if defenses.mfa_enabled:
+        if action_type in ("brute_force_creds", "pass_the_hash"):
+            prob *= 0.15  # MFA devastating for credential attacks
+        else:
+            prob *= 0.85
+    if defenses.firewall_enabled:
+        if action_type in ("pivot_to_host", "pass_the_hash", "exploit_public_service"):
+            prob *= 0.55  # firewall blocks many network actions
+        else:
+            prob *= 0.90
+    if defenses.patched:
+        if action_type in ("exploit_public_service", "exploit_local_vuln"):
+            prob *= 0.10  # patched = huge reduction for CVE exploits
+        else:
+            prob *= 0.90
+    if defenses.wazuh_agent:
+        prob *= 0.85
+
+    return max(prob, 0.02)  # floor at 2% — nothing is impossible
 
 
 # ---------------------------------------------------------------------------
@@ -204,18 +253,36 @@ def _build_exploit_public_service() -> dict:
                 mitre_technique_id="T1190",
             )
 
-        # Success requires a CVE-bearing service AND unpatched host
+        # Need a CVE-bearing service to attempt exploit
         vulnerable_svc = next(
-            (svc for svc in host.services if svc.cves and not host.defenses.patched),
+            (svc for svc in host.services if svc.cves),
             None,
         )
 
         if vulnerable_svc is None:
             return ActionOutcome(
                 action_id="exploit_public_service",
+                result=ActionResult.FAILURE,
+                target_ip=target_ip,
+                detail=f"No known CVEs found on {target_ip}",
+                detected=detected,
+                kill_chain_stage="initial_access",
+                mitre_technique_id="T1190",
+            )
+
+        # Probabilistic success based on host defenses
+        prob = _defense_success_probability(host, "exploit_public_service")
+        success = random.random() < prob
+
+        if not success:
+            return ActionOutcome(
+                action_id="exploit_public_service",
                 result=ActionResult.BLOCKED,
                 target_ip=target_ip,
-                detail=f"No exploitable unpatched CVEs found on {target_ip}",
+                detail=(
+                    f"Exploit attempt against {vulnerable_svc.cves[0]} on {target_ip} "
+                    f"was blocked by defenses (p={prob:.0%})"
+                ),
                 detected=detected,
                 kill_chain_stage="initial_access",
                 mitre_technique_id="T1190",
@@ -233,12 +300,13 @@ def _build_exploit_public_service() -> dict:
             target_ip=target_ip,
             detail=(
                 f"Exploited {vulnerable_svc.name} on port {vulnerable_svc.port} "
-                f"via {vulnerable_svc.cves[0]} on {target_ip}"
+                f"via {vulnerable_svc.cves[0]} on {target_ip} (p={prob:.0%})"
             ),
             detected=detected,
             kill_chain_stage="initial_access",
             mitre_technique_id="T1190",
-            data={"exploited_cve": vulnerable_svc.cves[0], "service": vulnerable_svc.name},
+            data={"exploited_cve": vulnerable_svc.cves[0], "service": vulnerable_svc.name,
+                  "success_probability": round(prob, 4)},
         )
 
     return {
@@ -275,13 +343,17 @@ def _build_brute_force_creds() -> dict:
                 mitre_technique_id="T1110",
             )
 
-        # MFA blocks brute force entirely
-        if host.defenses.mfa_enabled:
+        # Probabilistic: MFA heavily reduces but doesn't eliminate (token theft, MFA fatigue)
+        prob = _defense_success_probability(host, "brute_force_creds")
+        success = random.random() < prob
+
+        if not success:
+            reason = "MFA blocked authentication" if host.defenses.mfa_enabled else "Brute force unsuccessful"
             return ActionOutcome(
                 action_id="brute_force_creds",
-                result=ActionResult.BLOCKED,
+                result=ActionResult.BLOCKED if host.defenses.mfa_enabled else ActionResult.FAILURE,
                 target_ip=target_ip,
-                detail=f"MFA is enabled on {target_ip}; brute force ineffective",
+                detail=f"{reason} on {target_ip} (p={prob:.0%})",
                 detected=detected,
                 kill_chain_stage="initial_access",
                 mitre_technique_id="T1110",
@@ -296,10 +368,11 @@ def _build_brute_force_creds() -> dict:
             action_id="brute_force_creds",
             result=result,
             target_ip=target_ip,
-            detail=f"Credential brute force succeeded on {target_ip} (no MFA)",
+            detail=f"Credential brute force succeeded on {target_ip} (p={prob:.0%})",
             detected=detected,
             kill_chain_stage="initial_access",
             mitre_technique_id="T1110",
+            data={"success_probability": round(prob, 4)},
         )
 
     return {
@@ -721,6 +794,21 @@ def _build_exploit_local_vuln() -> dict:
                 mitre_technique_id="T1068",
             )
 
+        # Probabilistic: EDR/patching reduce local exploit success
+        prob = _defense_success_probability(host, "exploit_local_vuln")
+        success = random.random() < prob
+
+        if not success:
+            return ActionOutcome(
+                action_id="exploit_local_vuln",
+                result=ActionResult.FAILURE,
+                target_ip=target_ip,
+                detail=f"Local exploit {local_cve} failed on {target_ip} — defenses intervened (p={prob:.0%})",
+                detected=detected,
+                kill_chain_stage="privilege_escalation",
+                mitre_technique_id="T1068",
+            )
+
         host.admin_access = True
         agent_state.admin_hosts.add(target_ip)
 
@@ -729,11 +817,11 @@ def _build_exploit_local_vuln() -> dict:
             action_id="exploit_local_vuln",
             result=result,
             target_ip=target_ip,
-            detail=f"Local privilege escalation via {local_cve} on {target_ip}",
+            detail=f"Local privilege escalation via {local_cve} on {target_ip} (p={prob:.0%})",
             detected=detected,
             kill_chain_stage="privilege_escalation",
             mitre_technique_id="T1068",
-            data={"cve_used": local_cve},
+            data={"cve_used": local_cve, "success_probability": round(prob, 4)},
         )
 
     return {
@@ -996,10 +1084,33 @@ def _build_pivot_to_host() -> dict:
 
         try:
             host = env.get_host(target_ip)
-            host.compromised = True
         except Exception:
-            pass
+            return ActionOutcome(
+                action_id="pivot_to_host",
+                result=ActionResult.FAILURE,
+                target_ip=target_ip,
+                detail="Target host not found",
+                detected=False,
+                kill_chain_stage="lateral_movement",
+                mitre_technique_id="T1021",
+            )
 
+        # Probabilistic: firewalls, EDR, monitoring reduce pivot success
+        prob = _defense_success_probability(host, "pivot_to_host")
+        success = random.random() < prob
+
+        if not success:
+            return ActionOutcome(
+                action_id="pivot_to_host",
+                result=ActionResult.BLOCKED,
+                target_ip=target_ip,
+                detail=f"Lateral movement to {target_ip} blocked by defenses (p={prob:.0%})",
+                detected=detected,
+                kill_chain_stage="lateral_movement",
+                mitre_technique_id="T1021",
+            )
+
+        host.compromised = True
         agent_state.compromised_hosts.add(target_ip)
         agent_state.discovered_hosts.add(target_ip)
 
@@ -1008,11 +1119,11 @@ def _build_pivot_to_host() -> dict:
             action_id="pivot_to_host",
             result=result,
             target_ip=target_ip,
-            detail=f"Pivoted from {source_ip} to {target_ip} via lateral movement",
+            detail=f"Pivoted from {source_ip} to {target_ip} via lateral movement (p={prob:.0%})",
             detected=detected,
             kill_chain_stage="lateral_movement",
             mitre_technique_id="T1021",
-            data={"pivot_source": source_ip},
+            data={"pivot_source": source_ip, "success_probability": round(prob, 4)},
         )
 
     return {
@@ -1081,11 +1192,34 @@ def _build_pass_the_hash() -> dict:
 
         try:
             host = env.get_host(target_ip)
-            host.compromised = True
-            host.admin_access = True
         except Exception:
-            pass
+            return ActionOutcome(
+                action_id="pass_the_hash",
+                result=ActionResult.FAILURE,
+                target_ip=target_ip,
+                detail="Target host not found",
+                detected=False,
+                kill_chain_stage="lateral_movement",
+                mitre_technique_id="T1550",
+            )
 
+        # Probabilistic: MFA heavily reduces PtH, EDR/firewall also help
+        prob = _defense_success_probability(host, "pass_the_hash")
+        success = random.random() < prob
+
+        if not success:
+            return ActionOutcome(
+                action_id="pass_the_hash",
+                result=ActionResult.BLOCKED,
+                target_ip=target_ip,
+                detail=f"Pass-the-Hash blocked on {target_ip} (p={prob:.0%})",
+                detected=detected,
+                kill_chain_stage="lateral_movement",
+                mitre_technique_id="T1550",
+            )
+
+        host.compromised = True
+        host.admin_access = True
         agent_state.compromised_hosts.add(target_ip)
         agent_state.admin_hosts.add(target_ip)
         agent_state.discovered_hosts.add(target_ip)
@@ -1095,11 +1229,12 @@ def _build_pass_the_hash() -> dict:
             action_id="pass_the_hash",
             result=result,
             target_ip=target_ip,
-            detail=f"Pass-the-Hash authentication succeeded against {target_ip} from {source_ip}",
+            detail=f"Pass-the-Hash succeeded against {target_ip} from {source_ip} (p={prob:.0%})",
             detected=detected,
             kill_chain_stage="lateral_movement",
             mitre_technique_id="T1550",
-            data={"credential_source": list(agent_state.credentials_dumped)[0]},
+            data={"credential_source": list(agent_state.credentials_dumped)[0],
+                  "success_probability": round(prob, 4)},
         )
 
     return {
