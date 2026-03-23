@@ -4837,6 +4837,76 @@ function renderSwarmResults(report) {
     html += `</tbody></table></div>`;
   }
 
+  // Emergent Discoveries (Improvement #4)
+  const emergent = report.emergent_discoveries || [];
+  if (emergent.length) {
+    html += `<div style="margin-bottom:20px;padding:14px;background:rgba(188,77,255,0.08);border:1px solid rgba(188,77,255,0.3);border-radius:8px;">
+      <div style="font-size:13px;font-weight:700;color:#bc4dff;margin-bottom:10px;letter-spacing:1px;">EMERGENT DISCOVERIES</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">Paths discovered by follower divergence that outperform leader strategies — genuine swarm intelligence</div>`;
+    emergent.forEach(d => {
+      const color = { opportunist: '#d29922', apt: '#f85149', ransomware: '#bc4dff', insider: '#ff6e40' }[d.archetype] || '#888';
+      html += `<div style="padding:10px;margin-bottom:8px;background:var(--bg-card);border-radius:6px;border-left:3px solid ${color};">
+        <div style="font-size:12px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">${escHtml(d.archetype.toUpperCase())} — Emergent Path</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--accent);margin-bottom:6px;word-break:break-all;">${escHtml(d.emergent_path)}</div>
+        <div style="display:flex;gap:16px;font-size:11px;">
+          <span style="color:var(--success);">Follower: <strong>${Math.round(d.follower_success_rate * 100)}%</strong></span>
+          <span style="color:var(--text-muted);">vs Leader: <strong>${Math.round(d.leader_success_rate * 100)}%</strong></span>
+          <span style="color:#bc4dff;font-weight:700;">+${Math.round(d.improvement * 100)}pp improvement</span>
+          <span style="color:var(--text-muted);">n=${d.sample_size}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;font-style:italic;">${escHtml(d.insight)}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Cross-Batch Intelligence (Improvement #2)
+  const crossBatch = report.cross_batch_intelligence || {};
+  if (crossBatch.batch_evolution && crossBatch.batch_evolution.length) {
+    const trend = crossBatch.attacker_learning_trend || 'stable';
+    const trendColor = trend === 'improving' ? 'var(--critical)' : trend === 'degrading' ? 'var(--success)' : 'var(--text-muted)';
+    const trendLabel = trend === 'improving' ? 'ATTACKERS ADAPTING' : trend === 'degrading' ? 'DEFENSES WINNING' : 'STABLE';
+    const trendIcon = trend === 'improving' ? '&#9650;' : trend === 'degrading' ? '&#9660;' : '&#9644;';
+
+    html += `<div style="margin-bottom:20px;padding:14px;background:rgba(88,166,255,0.06);border:1px solid rgba(88,166,255,0.2);border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:700;color:var(--accent);letter-spacing:1px;">CROSS-BATCH INTELLIGENCE</div>
+        <span style="font-size:11px;font-weight:700;color:${trendColor};padding:3px 8px;border-radius:4px;background:rgba(88,166,255,0.1);">${trendIcon} ${trendLabel}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px;">
+        <div class="swarm-stat-card" style="padding:8px;">
+          <div style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--text-primary);">${Math.round(crossBatch.early_batch_success_rate * 100)}%</div>
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">Early Batches</div>
+        </div>
+        <div class="swarm-stat-card" style="padding:8px;">
+          <div style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:${trendColor};">${Math.round(crossBatch.late_batch_success_rate * 100)}%</div>
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">Late Batches</div>
+        </div>
+        <div class="swarm-stat-card" style="padding:8px;">
+          <div style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--accent);">${crossBatch.total_unique_strategies || 0}</div>
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">Unique Strategies</div>
+        </div>
+        <div class="swarm-stat-card" style="padding:8px;">
+          <div style="font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--text-primary);">${((crossBatch.strategic_diversity_score || 0) * 100).toFixed(0)}%</div>
+          <div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">Strategy Diversity</div>
+        </div>
+      </div>`;
+
+    // Top strategies
+    const topStrats = crossBatch.top_strategies || [];
+    if (topStrats.length) {
+      html += `<div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Most Effective Strategies</div>`;
+      topStrats.forEach((s, i) => {
+        html += `<div style="font-size:11px;color:var(--text-secondary);padding:4px 0;border-bottom:1px solid var(--border);">
+          <span style="color:var(--accent);font-weight:700;">${i+1}.</span> ${escHtml(s.strategy)}
+          <span style="color:var(--critical);font-weight:600;margin-left:8px;">${s.total_compromises} total compromises</span>
+        </div>`;
+      });
+    }
+
+    html += `</div>`;
+  }
+
   resultsEl.innerHTML = html;
 
   // Render heatmap with actual node positions

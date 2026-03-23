@@ -41,12 +41,60 @@ class SwarmConfig:
     )
     defenders_enabled: bool = True
     timesteps: int = 3
-    swarm_size: int = 50          # followers per leader archetype
+    swarm_size: int = 50          # followers per leader strategy
     monte_carlo_runs: int = 10    # independent leader batches
+    leaders_per_archetype: int = 3  # diverse LLM leaders per archetype per batch
     concurrency: int = 3
     ollama_host: str = "http://ollama:11434"
     ollama_model: str = "llama3.2:3b"
     target_jitter: bool = True
+    env_randomization: bool = True  # randomize defenses/CVEs per batch
+
+
+# ---------------------------------------------------------------------------
+# Environment Randomizer
+# ---------------------------------------------------------------------------
+
+import copy
+import random as _random
+
+
+class EnvironmentRandomizer:
+    """Randomly varies defenses and CVEs across Monte Carlo batches.
+
+    Models uncertainty in infrastructure knowledge — maybe that host
+    DOES have EDR but you forgot, maybe that CVE was patched last week.
+    Each batch sees a slightly different environment, producing more
+    realistic variance than pure dice-rolling.
+    """
+
+    def __init__(self, seed: int = 0):
+        self.rng = _random.Random(seed)
+
+    def randomize(self, env_snapshot: Dict, batch_idx: int) -> Dict:
+        """Return a modified copy of the environment snapshot."""
+        env = copy.deepcopy(env_snapshot)
+        self.rng.seed(batch_idx * 7919)  # deterministic per batch
+
+        for ip, host in env.get("hosts", {}).items():
+            defenses = host.get("defenses", {})
+
+            # 15% chance to flip each defense (models uncertainty)
+            for key in ["mfa_enabled", "edr_present", "firewall_enabled", "patched"]:
+                if key in defenses and self.rng.random() < 0.15:
+                    defenses[key] = not defenses[key]
+
+            # 20% chance to add or remove a CVE per service
+            for svc in host.get("services", []):
+                cves = svc.get("cves", [])
+                if cves and self.rng.random() < 0.20:
+                    # Remove a CVE (it was patched)
+                    svc["cves"] = cves[:-1]
+                elif not cves and self.rng.random() < 0.10:
+                    # Add a plausible CVE (unknown vuln discovered)
+                    svc["cves"] = [f"CVE-2024-{self.rng.randint(10000, 99999)}"]
+
+        return env
 
 
 class SwarmSimulator:
@@ -93,6 +141,10 @@ class SwarmSimulator:
         self._progress["status"] = "running"
         all_batch_results = []
         env_snapshot = environment.snapshot()
+        randomizer = EnvironmentRandomizer() if self.config.env_randomization else None
+
+        # Cross-batch learning: accumulate successful strategies
+        successful_strategies: List[Dict] = []
 
         for batch_idx in range(self.config.monte_carlo_runs):
             self._progress["current_batch"] = batch_idx + 1
@@ -103,12 +155,23 @@ class SwarmSimulator:
 
             logger.info(f"Swarm {swarm_id}: batch {batch_idx + 1}/{self.config.monte_carlo_runs}")
 
-            # 1. Fresh environment for this batch
-            batch_env = Environment.from_dict(env_snapshot)
+            # 1. Environment randomization per batch
+            if randomizer:
+                batch_env_data = randomizer.randomize(env_snapshot, batch_idx)
+            else:
+                batch_env_data = env_snapshot
 
-            # 2. Run leaders via existing CampaignSimulator
+            # 2. Run MULTIPLE diverse leaders per archetype
+            # Each leader makes independent LLM decisions → strategic diversity
+            all_leader_reports = []
+            expanded_archetypes = []
+            for archetype in self.config.agent_archetypes:
+                for leader_idx in range(self.config.leaders_per_archetype):
+                    expanded_archetypes.append(archetype)
+
+            batch_env = Environment.from_dict(batch_env_data)
             leader_config = SimulationConfig(
-                agent_archetypes=self.config.agent_archetypes,
+                agent_archetypes=expanded_archetypes,
                 defender_archetypes=self.config.defender_archetypes,
                 defenders_enabled=self.config.defenders_enabled,
                 timesteps=self.config.timesteps,
@@ -119,9 +182,22 @@ class SwarmSimulator:
             leader_sim = CampaignSimulator(leader_config)
             leader_report = await leader_sim.run(batch_env)
 
-            # 3. Replay through followers (synchronous, fast)
+            # 3. Cross-batch learning: feed successful strategies to next batch
+            for c in leader_report.get("campaigns", []):
+                if len(c.get("hosts_compromised", [])) > 0:
+                    path_seq = "->".join(
+                        s.get("action", "?") for s in c.get("attack_path", [])
+                    )
+                    successful_strategies.append({
+                        "archetype": c["archetype"],
+                        "path": path_seq,
+                        "hosts_compromised": len(c.get("hosts_compromised", [])),
+                        "batch": batch_idx,
+                    })
+
+            # 4. Replay through followers
             follower_results = self._run_followers(
-                leader_report, env_snapshot, batch_idx
+                leader_report, batch_env_data, batch_idx
             )
 
             total_runs = (
@@ -142,9 +218,10 @@ class SwarmSimulator:
         self._progress["status"] = "aggregating"
         self._progress["elapsed_ms"] = elapsed_ms
 
-        # 4. Aggregate across all batches
+        # 4. Aggregate across all batches (including emergent path detection)
         report = self._aggregate(
-            swarm_id, all_batch_results, env_snapshot, elapsed_ms
+            swarm_id, all_batch_results, env_snapshot, elapsed_ms,
+            successful_strategies,
         )
 
         self._progress["status"] = "complete"
@@ -236,6 +313,7 @@ class SwarmSimulator:
         all_batch_results: List[Dict],
         env_snapshot: Dict,
         elapsed_ms: int,
+        successful_strategies: Optional[List[Dict]] = None,
     ) -> Dict:
         """Aggregate all batch results into a SwarmReport."""
         hosts = env_snapshot.get("hosts", {})
@@ -347,6 +425,12 @@ class SwarmSimulator:
                     round(r, 4) for r in batch_success_rates
                 ],
             },
+            "emergent_discoveries": self._detect_emergent_paths(
+                all_attacker_runs
+            ),
+            "cross_batch_intelligence": self._build_cross_batch_intel(
+                successful_strategies or [], all_batch_results
+            ),
             "environment": env_snapshot,
         }
 
@@ -558,6 +642,143 @@ class SwarmSimulator:
             r["priority"] = i + 1
 
         return ranking
+
+    def _detect_emergent_paths(self, all_runs: List[Dict]) -> List[Dict]:
+        """Detect when followers discover paths MORE successful than leaders.
+
+        This is genuine emergent intelligence: a follower's fallback decision
+        (when the leader's action wasn't available due to divergent state)
+        accidentally found a better attack path. These discoveries are
+        insights no single agent would have produced.
+        """
+        # Group by archetype
+        leader_paths = defaultdict(list)
+        follower_paths = defaultdict(list)
+
+        for run in all_runs:
+            path = run.get("path_sequence", "")
+            comp = len(run.get("hosts_compromised", []))
+            archetype = run["archetype"]
+            if run.get("is_leader"):
+                leader_paths[archetype].append({"path": path, "compromised": comp})
+            else:
+                follower_paths[archetype].append({"path": path, "compromised": comp})
+
+        discoveries = []
+        for archetype in follower_paths:
+            # Find leader success rate for this archetype
+            leader_runs = leader_paths.get(archetype, [])
+            if not leader_runs:
+                continue
+            leader_success = sum(1 for r in leader_runs if r["compromised"] > 0)
+            leader_rate = leader_success / len(leader_runs) if leader_runs else 0
+            leader_path_set = set(r["path"] for r in leader_runs)
+
+            # Find follower paths that differ from ALL leader paths (diverged)
+            # and have higher success rate
+            follower_unique = defaultdict(lambda: {"count": 0, "successes": 0})
+            for r in follower_paths[archetype]:
+                if r["path"] not in leader_path_set and r["path"]:
+                    follower_unique[r["path"]]["count"] += 1
+                    if r["compromised"] > 0:
+                        follower_unique[r["path"]]["successes"] += 1
+
+            for path, stats in follower_unique.items():
+                if stats["count"] < 3:
+                    continue  # need minimum sample
+                follower_rate = stats["successes"] / stats["count"]
+                if follower_rate > leader_rate + 0.1:  # meaningfully better
+                    discoveries.append({
+                        "archetype": archetype,
+                        "emergent_path": path,
+                        "follower_success_rate": round(follower_rate, 4),
+                        "leader_success_rate": round(leader_rate, 4),
+                        "improvement": round(follower_rate - leader_rate, 4),
+                        "sample_size": stats["count"],
+                        "insight": (
+                            f"Followers diverged from {archetype} leader strategy "
+                            f"and discovered path '{path}' with "
+                            f"{round(follower_rate * 100)}% success vs "
+                            f"leader's {round(leader_rate * 100)}% — "
+                            f"a {round((follower_rate - leader_rate) * 100)}pp improvement"
+                        ),
+                    })
+
+        # Sort by improvement magnitude
+        discoveries.sort(key=lambda x: x["improvement"], reverse=True)
+        return discoveries[:10]
+
+    def _build_cross_batch_intel(
+        self, strategies: List[Dict], all_batch_results: List[Dict]
+    ) -> Dict:
+        """Build cross-batch intelligence showing how attacker effectiveness
+        evolves across batches (simulating real-world attacker learning).
+
+        Tracks: does the swarm get MORE effective in later batches? If yes,
+        it means repeated probing reveals weaknesses — a predictive signal.
+        """
+        if not all_batch_results:
+            return {}
+
+        # Per-batch metrics
+        batch_metrics = []
+        for batch in all_batch_results:
+            lr = batch["leader_report"]
+            campaigns = lr.get("campaigns", [])
+            total_comp = sum(
+                len(c.get("hosts_compromised", [])) for c in campaigns
+            )
+            total_actions = sum(c.get("actions_taken", 0) for c in campaigns)
+            total_success = sum(c.get("successful_actions", 0) for c in campaigns)
+            batch_metrics.append({
+                "batch": batch["batch_idx"],
+                "hosts_compromised": total_comp,
+                "success_rate": round(
+                    total_success / max(total_actions, 1), 4
+                ),
+                "unique_strategies": len(set(
+                    "->".join(s.get("action", "?") for s in c.get("attack_path", []))
+                    for c in campaigns
+                )),
+            })
+
+        # Detect trend: are later batches more effective?
+        if len(batch_metrics) >= 3:
+            early = batch_metrics[:len(batch_metrics) // 2]
+            late = batch_metrics[len(batch_metrics) // 2:]
+            early_rate = statistics.mean(m["success_rate"] for m in early)
+            late_rate = statistics.mean(m["success_rate"] for m in late)
+            early_comp = statistics.mean(m["hosts_compromised"] for m in early)
+            late_comp = statistics.mean(m["hosts_compromised"] for m in late)
+            trend = "improving" if late_rate > early_rate + 0.05 else (
+                "degrading" if late_rate < early_rate - 0.05 else "stable"
+            )
+        else:
+            early_rate = late_rate = 0
+            early_comp = late_comp = 0
+            trend = "insufficient_data"
+
+        # Most successful strategies across all batches
+        strat_counter = Counter()
+        for s in strategies:
+            strat_counter[f"{s['archetype']}: {s['path']}"] += s["hosts_compromised"]
+
+        return {
+            "batch_evolution": batch_metrics,
+            "attacker_learning_trend": trend,
+            "early_batch_success_rate": round(early_rate, 4),
+            "late_batch_success_rate": round(late_rate, 4),
+            "early_batch_compromises": round(early_comp, 2),
+            "late_batch_compromises": round(late_comp, 2),
+            "top_strategies": [
+                {"strategy": strat, "total_compromises": count}
+                for strat, count in strat_counter.most_common(5)
+            ],
+            "total_unique_strategies": len(set(s["path"] for s in strategies)),
+            "strategic_diversity_score": round(
+                len(set(s["path"] for s in strategies)) / max(len(strategies), 1), 4
+            ) if strategies else 0,
+        }
 
 
 # ---------------------------------------------------------------------------
