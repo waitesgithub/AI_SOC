@@ -131,6 +131,22 @@ First run downloads approximately 8GB of Docker images and the LLM model. Allow 
               +-------------------------------------------------------+
 
               +-------------------------------------------------------+
+              |  RESPONSE ORCHESTRATOR (:8800)                         |
+              |  Autonomous Adaptive Defense (closed loop)             |
+              |                                                        |
+              |  Detect incident                                       |
+              |    -> Simulate attacker next moves (swarm)             |
+              |    -> D3FEND countermeasure lookup                      |
+              |    -> LLM-scored defense plan (ranked by impact)        |
+              |    -> Auto-execute safe actions (graduated autonomy)    |
+              |    -> Queue critical actions for human approval         |
+              |    -> Verify via re-simulation                          |
+              |    -> Record outcome for learning                       |
+              |                                                        |
+              |  Adapters: Wazuh AR | Firewall | EDR | Identity        |
+              +-------------------------------------------------------+
+
+              +-------------------------------------------------------+
               |  MONITORING                                            |
               |  Prometheus (:9090) - 29 alert rules                  |
               |  Grafana (:3000) - 4 dashboards                       |
@@ -154,6 +170,7 @@ First run downloads approximately 8GB of Docker images and the LLM model. Allow 
 | ML Inference | :8500 | Network intrusion detection (RF/XGB/DT), 99.28% accuracy, <5ms, hot-reload |
 | Correlation Engine | :8600 | Alert-to-incident grouping, kill chain tracking, Markov chain attack prediction |
 | Rule Generator | :8700 | LLM-generated Sigma rules, historical back-testing, analyst approval queue |
+| Response Orchestrator | :8800 | Autonomous adaptive defense — simulation-driven response planning, D3FEND mapping, graduated autonomy |
 | Wazuh Integration | :8002 | Wazuh webhook receiver, alert routing, RAG enrichment |
 | Grafana | :3000 | 4 operational dashboards |
 | Prometheus | :9090 | Metrics collection, 29 configured alert rules |
@@ -544,6 +561,49 @@ Automated response is gated by LLM confidence:
 
 The upper tier requires explicit enablement in configuration; it is disabled by default.
 
+### Response Orchestrator — Autonomous Adaptive Defense
+
+The response orchestrator closes the loop between detection and action. When the correlation engine creates a new incident, it automatically triggers the defense pipeline:
+
+1. **Simulate** — The swarm simulator runs LLM-powered attacker agents against the current infrastructure model to predict what the attacker will do next.
+2. **Plan** — MITRE D3FEND countermeasures are looked up for every detected ATT&CK technique. Each candidate defense action is scored using simulation results (actions that protect frequently-compromised hosts rank higher).
+3. **Classify** — A graduated autonomy model assigns each action to a tier:
+
+| Tier | Confidence | Blast Radius | Behavior |
+|------|-----------|-------------|----------|
+| AUTO-SAFE | >= 0.70 | None/Low | Execute immediately |
+| AUTO-VETO | >= 0.85 | Medium | Execute with 60-second veto window |
+| HUMAN-REQUIRED | Any | High, or critical target | Queue for analyst approval |
+
+**Safety invariant:** Any action touching a critical asset always requires human approval, regardless of confidence. This is structural — the threshold formula makes it mathematically impossible for critical + high-blast actions to reach auto-execute.
+
+4. **Execute** — Actions dispatch through adapters (Wazuh Active Response, firewall, EDR, identity provider). Each adapter implements `execute()`, `verify()`, `rollback()`, and `dry_run()`.
+5. **Verify** — After execution, the simulator re-runs against the updated environment. If the attack success rate dropped by >= 30%, the defense is verified. If not, actions auto-rollback.
+6. **Learn** — Outcomes feed back into the feedback service for continuous model improvement.
+
+The D3FEND integration covers 35+ ATT&CK techniques mapped to 13 defensive countermeasures across 7 D3FEND tactics (Harden, Detect, Isolate, Evict, Restore, Deceive, Model).
+
+**API:**
+```bash
+# Trigger autonomous defense for an incident
+curl -X POST http://localhost:8800/defend \
+  -H "Content-Type: application/json" \
+  -d '{"incident_id": "INC-20250324-ab12", "auto_execute": true}'
+
+# List all defense plans
+curl http://localhost:8800/plans
+
+# View pending human approval requests
+curl http://localhost:8800/approvals
+
+# Approve or reject an action
+curl -X POST http://localhost:8800/plans/PLAN-001/actions/ACT-001/approve \
+  -d '{"approved": true, "analyst_id": "analyst1"}'
+
+# Look up D3FEND countermeasures for any ATT&CK technique
+curl http://localhost:8800/d3fend/lookup/T1110
+```
+
 ### Correlation Engine
 
 Alerts are grouped into incidents using three signals:
@@ -648,9 +708,13 @@ python services/correlation-engine/run_experiments.py --scales 10,50,100 --batch
 - Auto-population of simulation environment model from Wazuh agent inventory and vulnerability scans
 - ~~DefenderAgent for red-vs-blue simulation~~ **Done** — 3 defender archetypes with 8 actions
 - ~~Swarm intelligence scaling~~ **Done** — 37,575 agents, Monte Carlo batches, emergent discovery
+- ~~Autonomous adaptive defense (closed-loop response)~~ **Done** — Response orchestrator with D3FEND mapping, graduated autonomy, simulation-driven planning, adapter-based execution, verification via re-simulation
+- Simulation fidelity validation — benchmarking simulated attack success rates against real red team outcomes
 - Simulation benchmarking against MITRE CALDERA adversary emulation results
 - Larger model evaluation (70B+) to address multi-hop lateral movement gap identified in research
 - Reusable simulation framework extraction (standalone package for any SOC platform)
+- Production adapter implementations (pfSense, CrowdStrike, Azure AD) beyond current stubs
+- Convergence proof — does the feedback loop measurably improve defenses over time?
 
 ---
 

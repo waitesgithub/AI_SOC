@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     wazuh_api_password: str = ""  # From CORRELATION_WAZUH_API_PASSWORD
     wazuh_api_verify_ssl: bool = False
 
+    # Response Orchestrator Integration
+    response_orchestrator_url: str = "http://response-orchestrator:8000"
+    auto_defend_enabled: bool = True
+    auto_defend_min_severity: str = "high"  # Minimum severity to trigger defense
+
     # Logging / Server
     log_level: str = "INFO"
     host: str = "0.0.0.0"

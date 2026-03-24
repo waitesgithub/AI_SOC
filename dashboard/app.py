@@ -56,6 +56,11 @@ AI_SERVICES = {
         "label": "Rule Generator",
         "description": "AI-powered Sigma rule generation",
     },
+    "response-orchestrator": {
+        "url": "http://localhost:8800",
+        "label": "Response Orchestrator",
+        "description": "Autonomous adaptive defense — simulation-driven response",
+    },
 }
 
 QUICK_LINKS = [
@@ -438,6 +443,47 @@ def get_pending_rules():
 @app.route("/api/rules/<rule_id>/approve", methods=["PUT"])
 def approve_rule(rule_id):
     return _proxy(f"http://localhost:8700/rules/{rule_id}/approve", method="PUT", timeout=TIMEOUT_STD)
+
+
+# ---------------------------------------------------------------------------
+# Response Orchestrator  (port 8800)
+# ---------------------------------------------------------------------------
+@app.route("/api/defend", methods=["POST"])
+def trigger_defense():
+    return _proxy("http://localhost:8800/defend", method="POST", timeout=TIMEOUT_LONG)
+
+
+@app.route("/api/defense/plans")
+def defense_plans():
+    return _proxy("http://localhost:8800/plans", timeout=TIMEOUT_STD)
+
+
+@app.route("/api/defense/plans/<plan_id>")
+def defense_plan_detail(plan_id):
+    return _proxy(f"http://localhost:8800/plans/{plan_id}", timeout=TIMEOUT_STD)
+
+
+@app.route("/api/defense/approvals")
+def defense_approvals():
+    return _proxy("http://localhost:8800/approvals", timeout=TIMEOUT_STD)
+
+
+@app.route("/api/defense/plans/<plan_id>/actions/<action_id>/approve", methods=["POST"])
+def defense_approve_action(plan_id, action_id):
+    return _proxy(
+        f"http://localhost:8800/plans/{plan_id}/actions/{action_id}/approve",
+        method="POST", timeout=TIMEOUT_STD,
+    )
+
+
+@app.route("/api/d3fend/lookup/<technique_id>")
+def d3fend_lookup(technique_id):
+    return _proxy(f"http://localhost:8800/d3fend/lookup/{technique_id}", timeout=TIMEOUT_STD)
+
+
+@app.route("/api/d3fend/techniques")
+def d3fend_techniques():
+    return _proxy("http://localhost:8800/d3fend/techniques", timeout=TIMEOUT_STD)
 
 
 # ---------------------------------------------------------------------------

@@ -53,6 +53,7 @@ from defender_archetypes import DEFENDER_ARCHETYPE_PROMPTS
 from swarm import SwarmSimulator, SwarmConfig
 from history_store import HistoryStore
 from research_metrics import compute_all_metrics, export_for_paper, prediction_accuracy
+import asyncio
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -162,6 +163,73 @@ app = FastAPI(
 # Helpers
 # ---------------------------------------------------------------------------
 
+SEVERITY_TRIGGER_ORDER = {
+    "informational": 0, "low": 1, "medium": 2, "high": 3, "critical": 4,
+}
+
+
+async def _trigger_defense(incident_id: str, severity: str, is_new: bool):
+    """
+    Non-blocking callback to the Response Orchestrator.
+
+    Fires when a new high-severity incident is created OR when an existing
+    incident escalates to a qualifying severity level. Failures are logged
+    but never block the correlation response.
+    """
+    if not settings.auto_defend_enabled:
+        return
+
+    min_level = SEVERITY_TRIGGER_ORDER.get(settings.auto_defend_min_severity, 3)
+    current_level = SEVERITY_TRIGGER_ORDER.get(severity, 0)
+    if current_level < min_level:
+        return
+
+    trigger_reason = "new_incident" if is_new else "severity_escalation"
+    logger.info(
+        "Triggering autonomous defense for %s (severity=%s, reason=%s)",
+        incident_id, severity, trigger_reason,
+    )
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{settings.response_orchestrator_url}/defend",
+                json={
+                    "incident_id": incident_id,
+                    "auto_execute": True,
+                    "dry_run": False,
+                    "skip_simulation": False,
+                },
+                timeout=10.0,  # Just the trigger — orchestrator runs async
+            )
+            if resp.status_code == 201:
+                plan = resp.json()
+                logger.info(
+                    "Defense plan triggered: %s (%d actions) for incident %s",
+                    plan.get("plan_id", "unknown"),
+                    plan.get("total_actions", 0),
+                    incident_id,
+                )
+            elif resp.status_code == 429:
+                logger.warning(
+                    "Defense trigger rate-limited for %s: %s",
+                    incident_id, resp.text,
+                )
+            else:
+                logger.warning(
+                    "Defense trigger returned %d for %s: %s",
+                    resp.status_code, incident_id, resp.text[:200],
+                )
+    except httpx.ConnectError:
+        logger.debug(
+            "Response orchestrator not available — defense trigger skipped for %s",
+            incident_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Defense trigger failed for %s: %s", incident_id, exc,
+        )
+
 
 def _incident_model_to_summary(row: IncidentModel) -> IncidentSummary:
     return IncidentSummary(
@@ -249,6 +317,12 @@ async def correlate_alert(
                 result.incident_id,
                 request.alert_id,
             )
+            # Trigger autonomous defense (non-blocking)
+            asyncio.create_task(
+                _trigger_defense(
+                    result.incident_id, request.severity, is_new=True,
+                )
+            )
         else:
             INCIDENTS_UPDATED.inc()
             logger.info(
@@ -256,6 +330,12 @@ async def correlate_alert(
                 request.alert_id,
                 result.incident_id,
                 result.correlation_score,
+            )
+            # Trigger defense on escalation (severity >= threshold on existing incident)
+            asyncio.create_task(
+                _trigger_defense(
+                    result.incident_id, request.severity, is_new=False,
+                )
             )
 
         return result
