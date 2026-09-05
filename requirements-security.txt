@@ -25,4 +25,4 @@ safety==2.3.5
 
 # Additional Security
 python-dotenv==1.0.0
-cryptography==41.0.7
+cryptography==50.0.0
