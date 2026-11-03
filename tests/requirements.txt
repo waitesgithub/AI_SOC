@@ -24,7 +24,7 @@ locust==2.19.1
 
 # Code Quality
 black==23.12.1
-pylint==3.0.3
+pylint==4.0.9
 mypy==1.7.1
 flake8==6.1.0
 isort==5.13.2
